@@ -3,8 +3,9 @@
 	ProjectType="Visual C++"
 	Version="9,00"
 	Name="IfcGeom"
-	ProjectGUID="{D3E6944E-EA43-40BB-8DB3-9EC097F43B2B}"
+	ProjectGUID="{BA57AF0F-1D12-4FAC-BD40-7474D729CAE9}"
 	RootNamespace="IfcGeom"
+	Keyword="Win32Proj"
 	TargetFrameworkVersion="196613"
 	>
 	<Platforms>
@@ -17,11 +18,10 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="..\build\debug"
-			IntermediateDirectory="..\temp\geom\debug"
+			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
-			CharacterSet="2"
-			BuildLogFile="$(IntDir)\BuildLog.htm"
+			CharacterSet="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
@@ -42,13 +42,11 @@
 				Name="VCCLCompilerTool"
 				AdditionalOptions="/DWNT"
 				Optimization="0"
-				AdditionalIncludeDirectories=""
-				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS;WIN32;_DEBUG;_WINDOWS"
-				GeneratePreprocessedFile="0"
+				PreprocessorDefinitions="WIN32;_DEBUG;_LIB"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
-				ProgramDataBaseFileName="$(IntDir)\vc90.pdb"
+				UsePrecompiledHeader="0"
 				WarningLevel="3"
 				DebugInformationFormat="4"
 			/>
@@ -82,10 +80,10 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="..\build\release"
-			IntermediateDirectory="..\temp\geom\release"
+			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="4"
-			CharacterSet="2"
+			CharacterSet="1"
 			WholeProgramOptimization="1"
 			>
 			<Tool
@@ -105,14 +103,14 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalOptions="/DWNT"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
-				PreprocessorDefinitions="_CRT_SECURE_NO_WARNINGS"
+				PreprocessorDefinitions="WIN32;NDEBUG;_LIB"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
+				UsePrecompiledHeader="0"
 				WarningLevel="3"
-				DebugInformationFormat="0"
+				DebugInformationFormat="3"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -152,7 +150,19 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="..\src\ifcgeom\IfcGeom.cpp"
+				RelativePath="..\src\ifcgeom\IfcGeomCurves.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomFaces.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomFunctions.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomHelpers.cpp"
 				>
 			</File>
 			<File
@@ -160,7 +170,15 @@
 				>
 			</File>
 			<File
-				RelativePath="..\src\ifcgeom\IfcTypes.cpp"
+				RelativePath="..\src\ifcgeom\IfcGeomShapes.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomWires.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcRegister.cpp"
 				>
 			</File>
 		</Filter>
@@ -170,21 +188,59 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath="..\src\ifcgeom\IfcGeom.h"
+				>
+			</File>
+			<File
 				RelativePath="..\src\ifcgeom\IfcGeomObjects.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\ifcgeom\IfcMacro.h"
+				RelativePath="..\src\ifcgeom\IfcRegister.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\ifcgeom\IfcSchema.h"
+				RelativePath="..\src\ifcgeom\IfcRegisterConvertCurve.h"
 				>
 			</File>
 			<File
-				RelativePath="..\src\ifcgeom\IfcTypes.h"
+				RelativePath="..\src\ifcgeom\IfcRegisterConvertFace.h"
 				>
 			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcRegisterConvertShape.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcRegisterConvertWire.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcRegisterCreateCache.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcRegisterDef.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcRegisterGeomHeader.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcRegisterPurgeCache.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcRegisterUndef.h"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="Resource Files"
+			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
+			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
+			>
 		</Filter>
 	</Files>
 	<Globals>

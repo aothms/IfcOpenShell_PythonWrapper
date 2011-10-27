@@ -1,4 +1,4 @@
-/********************************************************************************
+/*******************************************************************************
 *                                                                              *
 * This file is part of IfcOpenShell.                                           *
 *                                                                              *
@@ -17,15 +17,19 @@
 *                                                                              *
 ********************************************************************************/
 
+/*******************************************************************************
+*                                                                              *
+* An intermediate between the Plugin implementation and the Model              *
+* implementation, nothing fancy going on here.                                 *
+*                                                                              *
+********************************************************************************/
+
 package org.ifcopenshell;
 
-import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.nio.ByteBuffer;
 
 import org.bimserver.plugins.ifcengine.IfcEngine;
 import org.bimserver.plugins.ifcengine.IfcEngineException;
@@ -35,95 +39,26 @@ import org.slf4j.LoggerFactory;
 
 public class IfcOpenShellEngine implements IfcEngine {
 	private static final Logger LOGGER = LoggerFactory.getLogger(IfcOpenShellEngine.class);
-	private InputStream stdout_stream, stderr_stream;
-	private OutputStream stdin_stream;
-	private BufferedWriter stdin;
-	public static final Boolean debug = true;
-	public static final int timeout = 20000;
-	
-	private byte[] waitForData() throws IOException {
-		try {
-			int t = 0;
-			while ( true ) {
-				int av = stdout_stream.available();
-				if ( av == 0 ) {
-					if ( ++t > timeout ) 
-						throw new IOException();
-					Thread.sleep(1);
-					continue;
-				}
-				byte[] bytes = new byte[av];
-				stdout_stream.read(bytes);
-				return bytes;
-			}
-		} catch (Throwable e) { 
-			throw new IOException(); 
-		}
-	}
-	
-	private void printErrors() throws IOException {
-		int av = stderr_stream.available();
-		if ( av > 0 ) {
-			LOGGER.error("Errors were encountered while processing Ifc files");
-			byte[] bytes = new byte[av];
-			stdout_stream.read(bytes);
-			String errors = new String(bytes);
-			System.out.println(errors);
-		}
-	}
-	
-	public String waitForResponseString() throws IOException {
-		return new String(waitForData());
-	}	
-	private ByteBuffer waitForResponseBuffer() throws IOException {
-		return ByteBuffer.wrap(waitForData());
-	}
-	
-	public String sendCommandText(String command) throws IOException {
-		if ( debug ) LOGGER.info(String.format(">>> %s", command));
-		stdin.write(String.format("%s\n", command));
-		stdin.flush();	
-		String response = waitForResponseString();
-		if ( debug ) LOGGER.info(String.format("<<< %s", response));
-		return response;
-	}
-	
-	public ByteBuffer sendCommandBinary(String command) throws IOException {
-		if ( debug ) LOGGER.info(String.format(">>> %s", command));
-		stdin.write(String.format("%s\n", command));
-		stdin.flush();
-		if ( debug ) LOGGER.info("<<< [binary data]");
-		return waitForResponseBuffer();
-	}
-	
-	public IfcOpenShellEngine(File exec) throws IOException {
-		LOGGER.info("Creating IfcOpenShell engine");
-		if ( true ) {
-			Runtime run = Runtime.getRuntime();
-			Process pr = run.exec(exec.getAbsolutePath());			
-			stdin_stream = pr.getOutputStream();
-			stdin = new BufferedWriter(new OutputStreamWriter(stdin_stream));
-			stderr_stream = pr.getErrorStream();
-			stdout_stream = pr.getInputStream();
-			String response = waitForResponseString();
-			if ( debug ) LOGGER.info(String.format("<<< %s",response));
-		}
+	public static final Boolean debug = false;
+	private String filename;
+
+	public IfcOpenShellEngine(String fn) throws IOException {
+		filename = fn;
+		LOGGER.info("Initializing IfcOpenShell engine");
 	}
 
 	@Override
 	public void close() {
 		LOGGER.info("Closing IfcOpenShell engine");
-		try {
-			printErrors();
-			sendCommandText("exit");
-		} catch (IOException e) {
-			e.printStackTrace();
-		}		
 	}
 
 	@Override
 	public IfcEngineModel openModel(File ifcFile) throws IfcEngineException {
-		return new IfcOpenShellModel(ifcFile, this);
+		try {
+			return openModel(new FileInputStream(ifcFile),(int)ifcFile.length());
+		} catch (IOException e) {
+			throw new IfcEngineException("Failed to open model");		
+		}
 	}
 
 	@Override
@@ -140,13 +75,7 @@ public class IfcOpenShellEngine implements IfcEngine {
 	@Override
 	public IfcEngineModel openModel(byte[] bytes) throws IfcEngineException {
 		try {
-			sendCommandText("loadstdin");
-			sendCommandText(String.format("%d",bytes.length));
-			stdin_stream.write(bytes);
-			stdin_stream.flush();
-			String response = waitForResponseString();
-			if ( debug ) LOGGER.info(String.format("<<< %s", response));
-			return new IfcOpenShellModel(this);
+			return new IfcOpenShellModel(filename,bytes);
 		} catch (Throwable e1) {
 			throw new IfcEngineException("Failed to open model");
 		}		

@@ -17,26 +17,29 @@
 *                                                                              *
 ********************************************************************************/
 
+/*******************************************************************************
+*                                                                              *
+* This class is a literal translation of the interface class IfcGeomObject in  *
+* the C++ implementation of IfcOpenShell, these babies are returned from the   *
+* JNI interface.                                                               *
+*                                                                              *
+********************************************************************************/
+
 package org.ifcopenshell;
 
-import org.bimserver.plugins.ifcengine.IfcEngineException;
-import org.bimserver.plugins.ifcengine.IfcEngineInstance;
-import org.bimserver.plugins.ifcengine.IfcEngineInstanceVisualisationProperties;
-
-public class IfcOpenShellEntityInstance implements IfcEngineInstance {
-	private int startVertex;
-	private int startIndex;
-	private int primitiveCount;
-
-	public IfcOpenShellEntityInstance(int startVertex, int startIndex, int primitiveCount) {
-		this.startVertex = startVertex;
-		this.startIndex = startIndex;
-		this.primitiveCount = primitiveCount;		
+public class IfcGeomObject {
+	public String name;
+	public String type;
+	public String guid;
+	public int[] indices;
+	public float[] vertices;
+	public float[] normals;
+	public IfcGeomObject(String nm, String t, String g, int[] i, float[] v, float[] n) {
+		name = nm;
+		type = t;
+		guid = g;
+		indices = i;
+		vertices = v;
+		normals = n;
 	}
-	@Override
-	public IfcEngineInstanceVisualisationProperties getVisualisationProperties()
-			throws IfcEngineException {
-		return new IfcEngineInstanceVisualisationProperties(startVertex, startIndex, primitiveCount);
-	}
-
 }

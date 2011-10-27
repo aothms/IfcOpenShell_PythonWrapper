@@ -1,4 +1,4 @@
-/********************************************************************************
+/*******************************************************************************
 *                                                                              *
 * This file is part of IfcOpenShell.                                           *
 *                                                                              *
@@ -17,18 +17,19 @@
 *                                                                              *
 ********************************************************************************/
 
+/*******************************************************************************
+*                                                                              *
+* This class ensures that a valid binary is available for the platform the     *
+* code is running on.                                                          *
+*                                                                              *
+********************************************************************************/
+
 package org.ifcopenshell;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.HashSet;
-import java.util.Set;
+import java.net.URL;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.bimserver.plugins.Plugin;
 import org.bimserver.plugins.PluginContext;
 import org.bimserver.plugins.PluginManager;
 import org.bimserver.plugins.ifcengine.IfcEngine;
@@ -40,13 +41,12 @@ import org.slf4j.LoggerFactory;
 public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 	private static final Logger LOGGER = LoggerFactory.getLogger(IfcOpenShellEnginePlugin.class);
 	private boolean initialized = false;
-	private File nativeFolder;
-	private File executableFile;
+	private String filename;
 
 	@Override
 	public IfcEngine createIfcEngine() throws IfcEngineException {
 		try {
-			return new IfcOpenShellEngine(executableFile);
+			return new IfcOpenShellEngine(filename);
 		} catch (IOException e) {
 			throw new IfcEngineException(e);
 		}
@@ -58,16 +58,6 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 	}
 
 	@Override
-	public String getName() {
-		return "IfcOpenShell";
-	}
-
-	@Override
-	public Set<Class<? extends Plugin>> getRequiredPlugins() {
-		return new HashSet<Class<? extends Plugin>>();
-	}
-
-	@Override
 	public String getVersion() {
 		return "0.2.0";
 	}
@@ -76,25 +66,17 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 	public void init(PluginManager pluginManager) {
 		PluginContext pluginContext = pluginManager.getPluginContext(this);
 		String os = System.getProperty("os.name").toLowerCase();
-		String libraryName = "IfcStdin";
-		if (os.contains("windows")) libraryName += ".exe";
-		InputStream inputStream = pluginContext.getResourceAsInputStream("lib/" + System.getProperty("sun.arch.data.model") + "/" + libraryName);
-		if (inputStream != null) {
-			File tmpFolder = new File(pluginManager.getHomeDir().getAbsolutePath(), "tmp");
-			nativeFolder = new File(tmpFolder, "IfcOpenShell");
-			try {
-				if (nativeFolder.exists()) {
-					FileUtils.deleteDirectory(nativeFolder);
-				}
-				nativeFolder.mkdir();
-				executableFile = new File(nativeFolder, libraryName);
-				LOGGER.info(String.format("Creating file %s", executableFile.getAbsolutePath()));
-				IOUtils.copy(inputStream, new FileOutputStream(executableFile));
-				executableFile.setExecutable(true);
-				initialized = true;
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+		String libraryName = String.format("lib/%s/%sIfcJni.%s",
+				System.getProperty("sun.arch.data.model"),
+				os.contains("windows") ? "" : "lib",
+				os.contains("windows") ? "dll" : (os.contains("linux") ? "so" : "dylib" )
+		);
+		URL u = pluginContext.getResourceAsUrl(libraryName);
+		if ( u == null ) {
+			LOGGER.error("IfcOpenShell is not available for your platform");
+		} else {
+			filename = u.getPath().toString();
+			initialized = new File(filename).exists();
 		}
 	}
 

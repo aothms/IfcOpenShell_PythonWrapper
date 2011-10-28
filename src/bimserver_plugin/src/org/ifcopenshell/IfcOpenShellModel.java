@@ -116,7 +116,7 @@ public class IfcOpenShellModel implements IfcEngineModel {
 			
 			indices = concatIntArray(indices,obj.indices);
 			vertices = concatFloatArray(vertices,obj.vertices);
-			normals = concatFloatArray(normals,obj.vertices);
+			normals = concatFloatArray(normals,obj.normals);
 			
 			entity_list.add(new IfcOpenShellEntityInstance(start_vertex,start_index,fcount));
 		}

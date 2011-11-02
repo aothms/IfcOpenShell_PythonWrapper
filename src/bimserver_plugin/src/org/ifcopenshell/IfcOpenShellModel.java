@@ -67,7 +67,13 @@ public class IfcOpenShellModel implements IfcEngineModel {
 	
 	// Load the binary and pass the IFC data to IfcOpenShell
 	public IfcOpenShellModel(String fn, byte[] input) {
-		System.load(fn);
+		try {
+			System.load(fn);
+		} catch ( Throwable e ) {
+			e.printStackTrace();
+			return;
+		}
+		
 		validModel = setIfcData(input);
 	}
 

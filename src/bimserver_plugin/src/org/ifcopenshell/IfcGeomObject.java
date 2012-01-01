@@ -28,18 +28,21 @@
 package org.ifcopenshell;
 
 public class IfcGeomObject {
+	public int id;
 	public String name;
 	public String type;
 	public String guid;
 	public int[] indices;
 	public float[] vertices;
 	public float[] normals;
-	public IfcGeomObject(String nm, String t, String g, int[] i, float[] v, float[] n) {
+	
+	public IfcGeomObject(int i, String nm, String t, String g, int[] is, float[] vs, float[] ns) {
+		id = i;
 		name = nm;
 		type = t;
 		guid = g;
-		indices = i;
-		vertices = v;
-		normals = n;
+		indices = is;
+		vertices = vs;
+		normals = ns;
 	}
 }

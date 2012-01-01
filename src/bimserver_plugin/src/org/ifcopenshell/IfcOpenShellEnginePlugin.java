@@ -59,7 +59,7 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 
 	@Override
 	public String getVersion() {
-		return "0.2.0";
+		return "0.3.0RC2";
 	}
 
 	@Override

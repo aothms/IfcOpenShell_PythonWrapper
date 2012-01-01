@@ -44,6 +44,7 @@ import org.bimserver.plugins.ifcengine.IfcEngineSurfaceProperties;
 public class IfcOpenShellModel implements IfcEngineModel {
 	private Boolean validModel = false;
 	private HashMap<String,List<IfcOpenShellEntityInstance>> instances;
+	private HashMap<Integer,IfcOpenShellEntityInstance> instances_byid;
 	
 	// Native C++ functions implemented in IfcOpenShell
 	private native IfcGeomObject getGeometry();
@@ -96,6 +97,8 @@ public class IfcOpenShellModel implements IfcEngineModel {
 		// We keep track of instances ourselves
 		instances = new HashMap<String,List<IfcOpenShellEntityInstance>>();
 		
+		instances_byid = new HashMap<Integer,IfcOpenShellEntityInstance>();
+		
 		while ( true ) {
 			// Get the geometry from IfcOpenShell, this goes one instance at a time
 			IfcGeomObject obj = getGeometry();
@@ -124,7 +127,9 @@ public class IfcOpenShellModel implements IfcEngineModel {
 			vertices = concatFloatArray(vertices,obj.vertices);
 			normals = concatFloatArray(normals,obj.normals);
 			
-			entity_list.add(new IfcOpenShellEntityInstance(start_vertex,start_index,fcount));
+			IfcOpenShellEntityInstance instance = new IfcOpenShellEntityInstance(start_vertex,start_index,fcount);
+			entity_list.add(instance);			
+			instances_byid.put(obj.id, instance);
 		}
 		return new IfcEngineGeometry(indices,vertices,normals);
 	}
@@ -159,6 +164,15 @@ public class IfcOpenShellModel implements IfcEngineModel {
 	@Override
 	public void setPostProcessing(boolean postProcessing)
 			throws IfcEngineException {
+	}
+	@Override
+	public IfcEngineInstance getInstanceFromExpressId(int oid)
+			throws IfcEngineException {
+		if ( instances_byid.containsKey(oid) ) {
+			return instances_byid.get(oid);
+		} else {
+			throw new IfcEngineException(String.format("Entity #%d not found in model", oid));
+		}
 	}
 
 }

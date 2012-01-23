@@ -27,9 +27,12 @@
 package org.ifcopenshell;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URL;
+import java.io.InputStream;
 
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.bimserver.plugins.PluginContext;
 import org.bimserver.plugins.PluginManager;
 import org.bimserver.plugins.ifcengine.IfcEngine;
@@ -66,17 +69,30 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 	public void init(PluginManager pluginManager) {
 		PluginContext pluginContext = pluginManager.getPluginContext(this);
 		String os = System.getProperty("os.name").toLowerCase();
-		String libraryName = String.format("lib/%s/%sIfcJni.%s",
-				System.getProperty("sun.arch.data.model"),
-				os.contains("windows") ? "" : "lib",
-				os.contains("windows") ? "dll" : (os.contains("linux") ? "so" : "dylib" )
-		);
-		URL u = pluginContext.getResourceAsUrl(libraryName);
-		if ( u == null ) {
-			LOGGER.error("IfcOpenShell is not available for your platform");
-		} else {
-			filename = u.getPath().toString();
-			initialized = new File(filename).exists();
+		String libraryName = "";
+		if (os.contains("windows")) {
+			libraryName = "IfcJni.dll";
+		} else if (os.contains("osx") || os.contains("os x") || os.contains("darwin")) {
+			libraryName = "libIfcJni.dylib";
+		} else if (os.contains("linux")) {
+			libraryName = "libIfcJni.so";
+		}
+		InputStream inputStream = pluginContext.getResourceAsInputStream("lib/" + System.getProperty("sun.arch.data.model") + "/" + libraryName);
+		if (inputStream != null) {
+			File tmpFolder = new File(pluginManager.getTempDir(), "tmp");
+			File nativeFolder = new File(tmpFolder, "IfcOpenShellEngine");
+			try {
+				if (nativeFolder.exists()) {
+					FileUtils.deleteDirectory(nativeFolder);
+				}
+				FileUtils.forceMkdir(nativeFolder);
+				File file = new File(nativeFolder, libraryName);
+				IOUtils.copy(inputStream, new FileOutputStream(file));
+				this.filename = file.getAbsolutePath();
+				initialized = new File(filename).exists();
+			} catch (IOException e) {
+				LOGGER.error("", e);
+			}
 		}
 	}
 
@@ -85,4 +101,8 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 		return initialized;
 	}
 
+	@Override
+	public String getDefaultIfcEngineName() {
+		return "IFC OpenShell Engine";
+	}
 }

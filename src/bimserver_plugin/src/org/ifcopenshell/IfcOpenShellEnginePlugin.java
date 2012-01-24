@@ -59,10 +59,14 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 	public String getDescription() {
 		return "Open source IFC geometry engine<br>visit <a href='http://ifcopenshell.org'>ifcopenshell.org</a>";
 	}
+	
+	public static String getVersionStatic() {
+		return "0.3.0-rc2";
+	}
 
 	@Override
 	public String getVersion() {
-		return "0.3.0RC2";
+		return getVersionStatic();
 	}
 
 	@Override
@@ -103,6 +107,6 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 
 	@Override
 	public String getDefaultIfcEngineName() {
-		return "IFC OpenShell Engine";
+		return "IfcOpenShell Engine";
 	}
 }

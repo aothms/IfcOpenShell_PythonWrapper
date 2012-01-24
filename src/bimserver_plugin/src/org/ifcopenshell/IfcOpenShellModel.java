@@ -49,6 +49,7 @@ public class IfcOpenShellModel implements IfcEngineModel {
 	// Native C++ functions implemented in IfcOpenShell
 	private native IfcGeomObject getGeometry();
 	private native boolean setIfcData(byte[] b);
+	private native String getPluginVersion();
 
 	// Convenience functions to concatenate arrays
 	private static float[] concatFloatArray(float[] a, float[] b) {
@@ -67,14 +68,23 @@ public class IfcOpenShellModel implements IfcEngineModel {
 	}
 	
 	// Load the binary and pass the IFC data to IfcOpenShell
-	public IfcOpenShellModel(String fn, byte[] input) {
+	public IfcOpenShellModel(String fn, byte[] input) throws IfcEngineException {
 		try {
 			System.load(fn);
 		} catch ( Throwable e ) {
 			e.printStackTrace();
-			return;
+			throw new IfcEngineException("Failed to load IfcOpenShell library");
 		}
-		
+		String java_version = IfcOpenShellEnginePlugin.getVersionStatic();
+		String cpp_version = "";
+		try {
+			cpp_version = getPluginVersion();
+		} catch ( UnsatisfiedLinkError e ) {
+			throw new IfcEngineException("Unable to determine IfcOpenShell version");
+		}
+		if ( !java_version.equalsIgnoreCase(cpp_version) ) {
+			throw new IfcEngineException(String.format("Version mismatch: Plugin version %s does not match IfcOpenShell version %s",java_version,cpp_version));
+		}
 		validModel = setIfcData(input);
 	}
 

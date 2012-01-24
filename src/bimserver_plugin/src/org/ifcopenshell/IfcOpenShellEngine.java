@@ -67,18 +67,14 @@ public class IfcOpenShellEngine implements IfcEngine {
 			byte[] bytes = new byte[size];
 			inputStream.read(bytes);
 			return openModel(bytes);
-		} catch (Throwable e1) {
+		} catch (IOException e) {
 			throw new IfcEngineException("Failed to open model");
 		}
 	}
 
 	@Override
 	public IfcEngineModel openModel(byte[] bytes) throws IfcEngineException {
-		try {
-			return new IfcOpenShellModel(filename,bytes);
-		} catch (Throwable e1) {
-			throw new IfcEngineException("Failed to open model");
-		}		
+		return new IfcOpenShellModel(filename,bytes);
 	}
 
 }

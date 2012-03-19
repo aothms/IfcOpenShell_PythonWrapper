@@ -61,7 +61,7 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 	}
 	
 	public static String getVersionStatic() {
-		return "0.3.0-rc2";
+		return "0.3.0-rc3";
 	}
 
 	@Override

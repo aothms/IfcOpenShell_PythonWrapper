@@ -48,6 +48,11 @@ public class IfcOpenShellEngine implements IfcEngine {
 	}
 
 	@Override
+	public void init() throws IfcEngineException {
+		LOGGER.info("Initializing IfcOpenShell engine");
+	}
+	
+	@Override
 	public void close() {
 		LOGGER.info("Closing IfcOpenShell engine");
 	}
@@ -76,5 +81,4 @@ public class IfcOpenShellEngine implements IfcEngine {
 	public IfcEngineModel openModel(byte[] bytes) throws IfcEngineException {
 		return new IfcOpenShellModel(filename,bytes);
 	}
-
 }

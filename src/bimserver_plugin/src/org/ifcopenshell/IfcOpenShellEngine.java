@@ -44,7 +44,6 @@ public class IfcOpenShellEngine implements IfcEngine {
 
 	public IfcOpenShellEngine(String fn) throws IOException {
 		filename = fn;
-		LOGGER.info("Initializing IfcOpenShell engine");
 	}
 
 	@Override

@@ -40,8 +40,11 @@ import org.bimserver.plugins.ifcengine.IfcEngineGeometry;
 import org.bimserver.plugins.ifcengine.IfcEngineInstance;
 import org.bimserver.plugins.ifcengine.IfcEngineModel;
 import org.bimserver.plugins.ifcengine.IfcEngineSurfaceProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IfcOpenShellModel implements IfcEngineModel {
+	private static final Logger LOGGER = LoggerFactory.getLogger(IfcOpenShellModel.class);
 	private Boolean validModel = false;
 	private HashMap<String,List<IfcOpenShellEntityInstance>> instances;
 	private HashMap<Integer,IfcOpenShellEntityInstance> instances_byid;
@@ -181,7 +184,11 @@ public class IfcOpenShellModel implements IfcEngineModel {
 		if ( instances_byid.containsKey(oid) ) {
 			return instances_byid.get(oid);
 		} else {
-			throw new IfcEngineException(String.format("Entity #%d not found in model", oid));
+			// Probably something went wrong with the processing of this element in
+			// the IfcOpenShell binary, as it has not been included in the enumerated
+			// set of elements with geometry.
+			LOGGER.warn(String.format("Entity #%d not found in model", oid));
+			return new IfcOpenShellEntityInstance(0,0,0);			
 		}
 	}
 

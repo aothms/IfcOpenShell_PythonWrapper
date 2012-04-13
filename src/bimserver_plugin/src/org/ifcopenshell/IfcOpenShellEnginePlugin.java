@@ -87,7 +87,11 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 			File nativeFolder = new File(tmpFolder, "IfcOpenShellEngine");
 			try {
 				if (nativeFolder.exists()) {
-					FileUtils.deleteDirectory(nativeFolder);
+					try {
+						FileUtils.deleteDirectory(nativeFolder);
+					} catch (IOException e) {
+						// Ignore
+					}
 				}
 				FileUtils.forceMkdir(nativeFolder);
 				File file = new File(nativeFolder, libraryName);

@@ -83,8 +83,7 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 		}
 		InputStream inputStream = pluginContext.getResourceAsInputStream("lib/" + System.getProperty("sun.arch.data.model") + "/" + libraryName);
 		if (inputStream != null) {
-			File tmpFolder = new File(pluginManager.getTempDir(), "tmp");
-			File nativeFolder = new File(tmpFolder, "IfcOpenShellEngine");
+			File nativeFolder = new File(pluginManager.getTempDir(), "IfcOpenShellEngine");
 			try {
 				if (nativeFolder.exists()) {
 					try {

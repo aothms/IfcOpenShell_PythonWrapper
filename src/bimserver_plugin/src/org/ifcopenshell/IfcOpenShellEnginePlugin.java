@@ -109,7 +109,7 @@ public class IfcOpenShellEnginePlugin implements IfcEnginePlugin {
 	}
 
 	@Override
-	public String getDefaultIfcEngineName() {
+	public String getDefaultName() {
 		return "IfcOpenShell Engine";
 	}
 }

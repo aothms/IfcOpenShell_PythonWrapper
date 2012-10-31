@@ -191,5 +191,8 @@ public class IfcOpenShellModel implements IfcEngineModel {
 			return new IfcOpenShellEntityInstance(0,0,0);			
 		}
 	}
+	@Override
+	public void setFormat(int format, int mask) throws IfcEngineException {
+	}
 
 }

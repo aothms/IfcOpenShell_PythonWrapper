@@ -33,13 +33,26 @@ class Mapping:
 
     def __init__(self, schema):
         self.schema = schema
+        
+    def flatten_type_string(self, type):
+        return self.flatten_type_string(self.schema.types[type].type.type) if self.schema.is_simpletype(type) else type
+        
+    def flatten_type(self, type):
+        res = self.flatten_type(self.schema.types[type].type.type) if self.schema.is_simpletype(type) else type
+        return res
+        
+    def simple_type_parent(self, type):
+        parent = self.schema.types[type].type.type
+        if isinstance(parent, nodes.AggregationType): parent = None
+        return None if parent in self.express_to_cpp_typemapping else parent
 
     def make_type_string(self, type):
         if isinstance(type, str):
             return self.express_to_cpp_typemapping.get(type, type)
         else:
             is_list = self.schema.is_entity(type.type)
-            tmpl = templates.list_type if is_list else templates.array_type
+            is_nested_list = isinstance(type.type, nodes.AggregationType)
+            tmpl = templates.list_list_type if is_nested_list else templates.list_type if is_list else templates.array_type
             return tmpl % {
                 'instance_type' : self.make_type_string(type.type),
                 'lower'         : type.bounds.lower,
@@ -53,6 +66,12 @@ class Mapping:
             return self.is_array(self.schema.types[type].type.type)
         else:
             return False
+            
+    def make_argument_entity(self, attr):
+        type = attr.type if hasattr(attr, 'type') else attr
+        while isinstance(type, nodes.AggregationType): type = type.type
+        if type in self.express_to_cpp_typemapping or isinstance(type, nodes.BinaryType): return "Type::UNDEFINED"
+        else: return "Type::%s" % type        
 
     def make_argument_type(self, attr):
         def _make_argument_type(type):
@@ -71,10 +90,10 @@ class Mapping:
             elif isinstance(type, nodes.AggregationType):
                 ty = _make_argument_type(type.type)
                 if ty == "UNKNOWN": return "UNKNOWN"
-                return "ENTITY_LIST" if ty == "ENTITY" else ("VECTOR_%s"%ty)
+                return "%s_LIST"%ty if ty.startswith("ENTITY") else ("VECTOR_%s"%ty)
             else: raise ValueError
-        supported = {'INT', 'BOOL', 'DOUBLE', 'STRING', 'VECTOR_INT', 'VECTOR_DOUBLE', 'VECTOR_STRING', 'ENTITY', 'ENTITY_LIST', 'ENUMERATION'}
-        ty = _make_argument_type(attr.type)
+        supported = {'INT', 'BOOL', 'DOUBLE', 'STRING', 'VECTOR_INT', 'VECTOR_DOUBLE', 'VECTOR_STRING', 'ENTITY', 'ENTITY_LIST', 'ENTITY_LIST_LIST', 'ENUMERATION'}
+        ty = _make_argument_type(attr.type if hasattr(attr, 'type') else attr)
         if ty not in supported: ty = 'UNKNOWN'
         return "IfcUtil::Argument_%s" % ty
 
@@ -85,29 +104,35 @@ class Mapping:
             return self.get_type_dep(type.type)
 
     def get_parameter_type(self, attr, allow_optional, allow_entities, allow_pointer = True):
-        type_str = self.express_to_cpp_typemapping.get(str(attr.type), attr.type)
+        
+        attr_type = self.flatten_type(attr.type)
+        type_str = self.express_to_cpp_typemapping.get(str(attr_type), attr_type)
+        
         is_ptr = False
-        if self.schema.is_enumeration(attr.type):
-            type_str = '%s::%s'%(attr.type, attr.type)
+        
+        if self.schema.is_enumeration(attr_type):
+            type_str = '%s::%s'%(attr_type, attr_type)
         elif isinstance(type_str, nodes.AggregationType):
-            ty = self.get_parameter_type(attr.type, False, allow_entities, allow_pointer=False)
-            if allow_entities and self.schema.is_select(attr.type.type):
+            is_nested_list = isinstance(attr_type.type, nodes.AggregationType)
+            ty = self.get_parameter_type(attr_type.type if is_nested_list else attr_type, False, allow_entities, False)
+            if True and self.schema.is_select(attr_type.type):
                 type_str = templates.untyped_list
             elif self.schema.is_simpletype(ty) or ty in self.express_to_cpp_typemapping.values():
                 type_str = templates.array_type % {
                     'instance_type' : ty,
-                    'lower'         : attr.type.bounds.lower,
-                    'upper'         : attr.type.bounds.upper
+                    'lower'         : attr_type.bounds.lower,
+                    'upper'         : attr_type.bounds.upper
                 }
             else:
-                type_str = templates.list_type % {
+                tmpl = templates.list_list_type if is_nested_list else templates.list_type
+                type_str = tmpl % {
                     'instance_type': ty
                 }
-        elif allow_pointer and self.schema.is_entity(type_str):
+        elif allow_pointer and (self.schema.is_entity(type_str) or self.schema.is_select(type_str)):
             type_str += '*'
             is_ptr = True
         elif not allow_pointer and self.schema.is_select(type_str):
-            type_str = "IfcUtil::IfcAbstractSelect"
+            type_str = "IfcUtil::IfcBaseClass*"
             is_ptr = True
         if allow_optional and attr.optional and not is_ptr:
             type_str = "boost::optional< %s >"%type_str
@@ -126,19 +151,24 @@ class Mapping:
         return c + ([str(s) for s in t.derive.elements] if t.derive else [])
 
     def list_instance_type(self, attr):
-        f = lambda v : 'IfcUtil::IfcAbstractSelect' if self.schema.is_select(v) else v
-        if self.is_array(attr.type) and not isinstance(attr.type, str):
-            return f(attr.type.type)
-        elif self.is_array(attr.type) and isinstance(attr.type, str):
-            return f(attr.type)
-        else: return None
+        f = lambda v : 'IfcUtil::IfcBaseClass' if self.schema.is_select(v) else v
+        if self.is_array(attr.type):
+            if not isinstance(attr.type, str) and self.is_array(attr.type.type):
+                if isinstance(attr.type.type, str):
+                    return f(attr.type.type)
+                else: return f(attr.type.type.type)
+            else:
+                if isinstance(attr.type, str):
+                    return f(attr.type)
+                else: return f(attr.type.type)
+        return None
 
     def is_templated_list(self, attr):
         ty = self.list_instance_type(attr)
         arr = self.is_array(attr.type)
         simple = self.schema.is_simpletype(ty)
         express = ty in self.express_to_cpp_typemapping
-        select = ty == 'IfcUtil::IfcAbstractSelect'
+        select = ty == 'IfcUtil::IfcBaseClass'
         return arr and not simple and not express and not select
 
     def get_assignable_arguments(self, t, include_derived = False):
@@ -163,9 +193,11 @@ class Mapping:
             'is_inherited'       : i < num_inherited,
             'is_enum'            : attr.type in self.schema.enumerations,
             'is_array'           : self.is_array(attr.type),
+            'is_nested'          : self.is_array(attr.type) and not isinstance(attr.type, str) and self.is_array(attr.type.type),
             'is_derived'         : attr.name in derived,
             'is_templated_list'  : self.is_templated_list(attr),
             'argument_type_enum' : self.make_argument_type(attr),
+            'argument_entity'    : self.make_argument_entity(attr),
             'argument_type'      : attr.type
         } for i, attr in attrs if include(attr)]
 

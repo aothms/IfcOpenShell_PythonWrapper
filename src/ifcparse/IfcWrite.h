@@ -33,7 +33,6 @@
 
 #include "../ifcparse/IfcUtil.h"
 #include "../ifcparse/IfcParse.h"
-#include "../ifcparse/IfcException.h"
 
 namespace IfcWrite {
 
@@ -83,27 +82,15 @@ namespace IfcWrite {
 			// An entity instance argument. It will either serialize to
 			// e.g. #123 or datatype identifier for simple types, e.g. 
 			// IFCREAL(12.3)
-			IfcUtil::IfcSchemaEntity,
+			IfcUtil::IfcBaseClass*,
 			// An entity list argument. It will either serialize to
 			// e.g. (#1,#2,#3) or datatype identifier for simple types,
 			// e.g. (IFCREAL(1.2),IFCINTEGER(3.))
-			IfcEntities
+			IfcEntityList::ptr,
+			// A list of list of entities. E.g. ((#1, #2), (#3))
+			IfcEntityListList::ptr
 		> container;
 	public:
-		enum argument_type {
-			argument_type_null,
-			argument_type_derived,
-			argument_type_int, 
-			argument_type_bool, 
-			argument_type_double, 
-			argument_type_string, 
-			argument_type_vector_int,
-			argument_type_vector_double,
-			argument_type_vector_string,
-			argument_type_enumeration,
-			argument_type_schema_entity,
-			argument_type_entities
-		};
 		IfcWriteArgument(IfcAbstractEntity* e) : entity(e) {}
 		template <typename T> const T& as() const {
 			if (const T* val = boost::get<T>(&container)) {
@@ -122,53 +109,16 @@ namespace IfcWrite {
 		operator std::vector<double>() const;
 		operator std::vector<int>() const;
 		operator std::vector<std::string>() const;
-		operator IfcUtil::IfcSchemaEntity() const;
-		operator IfcEntities() const;
+		operator IfcUtil::IfcBaseClass*() const;
+		operator IfcEntityList::ptr() const;
+        operator IfcEntityListList::ptr() const;
 		bool isNull() const;
-		ArgumentPtr operator [] (unsigned int i) const;
+		Argument* operator [] (unsigned int i) const;
 		std::string toString(bool upper=false) const;
-		unsigned int Size() const;
-		argument_type argumentType() const;
+		unsigned int size() const;
+		IfcUtil::ArgumentType type() const;
 	};
 
-	/// An entity to help with passing of SELECT arguments that
-	/// consist of simple types, for example useful to initialize
-	/// a new IfcProperty.
-	/// Proper memory management is difficult for now, so beware.
-	class IfcSelectHelperEntity : public IfcAbstractEntity {
-	private:
-		IfcSchema::Type::Enum _type;
-		IfcWriteArgument* arg;
-	public:
-		// FIXME: Make this a non-pointer argument and implement a copy constructor
-		IfcSelectHelperEntity(IfcSchema::Type::Enum t, IfcWriteArgument* a) : _type(t), arg(a) {}
-		IfcEntities getInverse(IfcSchema::Type::Enum,int,const std::string &);
-		IfcEntities getInverse(IfcSchema::Type::Enum);
-		std::string datatype();
-		ArgumentPtr getArgument(unsigned int i);
-		unsigned int getArgumentCount();
-		IfcSchema::Type::Enum type() const;
-		bool is(IfcSchema::Type::Enum t) const;
-		std::string toString(bool upper = false);
-		unsigned int id();
-		bool isWritable();
-	};
-
-	/// A helper class for passing of SELECT arguments that
-	/// consist of simple types, for example useful to initialize
-	/// a new IfcProperty.
-	/// Proper memory management is difficult for now, so beware.
-	class IfcSelectHelper : public IfcUtil::IfcBaseClass {
-	public:
-		IfcSelectHelper(const std::string& v, IfcSchema::Type::Enum t=IfcSchema::Type::IfcText);
-		IfcSelectHelper(const char* const v, IfcSchema::Type::Enum t=IfcSchema::Type::IfcText);
-		IfcSelectHelper(int v, IfcSchema::Type::Enum t=IfcSchema::Type::IfcInteger);
-		IfcSelectHelper(double v, IfcSchema::Type::Enum t=IfcSchema::Type::IfcReal);
-		IfcSelectHelper(bool v, IfcSchema::Type::Enum t=IfcSchema::Type::IfcBoolean);
-		bool is(IfcSchema::Type::Enum t) const;
-		IfcSchema::Type::Enum type() const;
-	};
-	
 	/// A helper class for the creation of IFC GlobalIds.
 	class IfcGuidHelper {
 	private:
@@ -184,13 +134,13 @@ namespace IfcWrite {
 	// This way they can be added in a single batch to the IfcFile
 	class EntityBuffer {
 	private:
-		IfcEntities buffer;
+		IfcEntityList::ptr buffer;
 		static EntityBuffer* i;
 		static EntityBuffer* instance();
 	public:
-		static IfcEntities Get();
+		static IfcEntityList::ptr Get();
 		static void Clear();
-		static void Add(IfcUtil::IfcSchemaEntity e);
+		static void Add(IfcUtil::IfcBaseClass* e);
 	};
 
 }

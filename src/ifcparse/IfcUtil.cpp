@@ -17,51 +17,57 @@
  *                                                                              *
  ********************************************************************************/
 
-#include "IfcUtil.h"
 #include <iostream>
+#include <algorithm>
 
-void IfcEntityList::push(IfcUtil::IfcSchemaEntity l) {
+#include "../ifcparse/IfcException.h"
+
+#include "IfcUtil.h"
+
+void IfcEntityList::push(IfcUtil::IfcBaseClass* l) {
 	if ( l ) ls.push_back(l);
 }
-void IfcEntityList::push(IfcEntities l) {
+void IfcEntityList::push(const IfcEntityList::ptr& l) {
 	for( it i = l->begin(); i != l->end(); ++i  ) {
 		if ( *i ) ls.push_back(*i);
 	}
 }
-int IfcEntityList::Size() const { return (unsigned int) ls.size(); }
+unsigned int IfcEntityList::size() const { return (unsigned int) ls.size(); }
 IfcEntityList::it IfcEntityList::begin() { return ls.begin(); }
 IfcEntityList::it IfcEntityList::end() { return ls.end(); }
-IfcUtil::IfcSchemaEntity IfcEntityList::operator[] (int i) {
+IfcUtil::IfcBaseClass* IfcEntityList::operator[] (int i) {
 	return ls[i];
 }
-IfcEntities IfcEntityList::getInverse(IfcSchema::Type::Enum c) {
-	IfcEntities l = IfcEntities(new IfcEntityList());
-	for( it i = begin(); i != end(); ++i  ) {
-		l->push((*i)->entity->getInverse(c));
-	}
-	return l;
+bool IfcEntityList::contains(IfcUtil::IfcBaseClass* instance) const {
+	return std::find(ls.begin(), ls.end(), instance) != ls.end();
 }
-IfcEntities IfcEntityList::getInverse(IfcSchema::Type::Enum c, int ar, const std::string& a) {
-	IfcEntities l = IfcEntities(new IfcEntityList());
-	for( it i = begin(); i != end(); ++i  ) {
-		l->push((*i)->entity->getInverse(c,ar,a));
+void IfcEntityList::remove(IfcUtil::IfcBaseClass* instance) {
+	std::vector<IfcUtil::IfcBaseClass*>::iterator it;
+	while ((it = std::find(ls.begin(), ls.end(), instance)) != ls.end()) {
+		ls.erase(it);
 	}
-	return l;
 }
- 
-bool IfcUtil::IfcEntitySelect::is(IfcSchema::Type::Enum v) const { return entity->is(v); }
-IfcSchema::Type::Enum IfcUtil::IfcEntitySelect::type() const { return entity->type(); }
-IfcUtil::IfcEntitySelect::IfcEntitySelect(IfcSchemaEntity b) { entity = b->entity; }
-IfcUtil::IfcEntitySelect::IfcEntitySelect(IfcAbstractEntityPtr e) { entity = e; }
-bool IfcUtil::IfcEntitySelect::isSimpleType() { return false; }
-IfcUtil::IfcEntitySelect::~IfcEntitySelect() { delete entity; }
+IfcEntityList::ptr IfcEntityList::filtered(const std::set<IfcSchema::Type::Enum>& entities) {
+	IfcEntityList::ptr return_value(new IfcEntityList);
+	for (it it = begin(); it != end(); ++it) {
+		bool contained = false;
+		for (std::set<IfcSchema::Type::Enum>::const_iterator jt = entities.begin(); jt != entities.end(); ++jt) {
+			if ((*it)->is(*jt)) {
+				contained = true;
+				break;
+			}
+		}
+		if (!contained) {
+			return_value->push(*it);
+		}
+	}	
+	return return_value;
+}
 
-bool IfcUtil::IfcArgumentSelect::is(IfcSchema::Type::Enum v) const { return _type == v; }
-IfcSchema::Type::Enum IfcUtil::IfcArgumentSelect::type() const { return _type; }
-IfcUtil::IfcArgumentSelect::IfcArgumentSelect(IfcSchema::Type::Enum t, ArgumentPtr a) { _type = t; arg = a; }
-ArgumentPtr IfcUtil::IfcArgumentSelect::wrappedValue() { return arg; }
-bool IfcUtil::IfcArgumentSelect::isSimpleType() { return true; }
-IfcUtil::IfcArgumentSelect::~IfcArgumentSelect() { delete arg; }
+
+unsigned int IfcUtil::IfcBaseType::getArgumentCount() const { return 1; }
+Argument* IfcUtil::IfcBaseType::getArgument(unsigned int i) const { return entity->getArgument(i); }
+const char* IfcUtil::IfcBaseType::getArgumentName(unsigned int i) const { if (i == 0) { return "wrappedValue"; } else { throw IfcParse::IfcException("argument out of range"); } }
 
 void Logger::SetOutput(std::ostream* l1, std::ostream* l2) { 
 	log1 = l1; 
@@ -70,7 +76,7 @@ void Logger::SetOutput(std::ostream* l1, std::ostream* l2) {
 		log2 = &log_stream;
 	}
 }
-void Logger::Message(Logger::Severity type, const std::string& message, const IfcAbstractEntityPtr entity) {
+void Logger::Message(Logger::Severity type, const std::string& message, IfcAbstractEntity* entity) {
 	if ( log2 && type >= verbosity ) {
 		(*log2) << "[" << severity_strings[type] << "] " << message << std::endl;
 		if ( entity ) (*log2) << entity->toString() << std::endl;
@@ -99,3 +105,24 @@ std::ostream* Logger::log2 = 0;
 std::stringstream Logger::log_stream;
 Logger::Severity Logger::verbosity = Logger::LOG_NOTICE;
 const char* Logger::severity_strings[] = { "Notice","Warning","Error" };
+
+static const char* const argument_type_string[] = {
+	"NULL",
+	"DERIVED",
+	"INT",
+	"BOOL",
+	"DOUBLE",
+	"STRING", 
+	"VECTOR_INT", 
+	"VECTOR_DOUBLE", 
+	"VECTOR_STRING", 
+	"ENUMERATION", 
+	"ENTITY", 
+	"ENTITY_LIST", 
+	"ENTITY_LIST_LIST", 
+	"UNKNOWN"
+};
+
+const char* IfcUtil::ArgumentTypeToString(ArgumentType argument_type) {
+	return argument_type_string[static_cast<int>(argument_type)];
+}

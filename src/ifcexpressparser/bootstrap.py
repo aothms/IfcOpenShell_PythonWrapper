@@ -170,8 +170,8 @@ import mapping
 import header
 import enum_header
 import implementation
-import rt_header
-import rt_implementation
+import latebound_header
+import latebound_implementation
 
 syntax.ignore(Regex(r"\((?:\*(?:[^*]*\*+)+?\))"))
 ast = syntax.parseFile(sys.argv[1])
@@ -181,13 +181,6 @@ mapping = mapping.Mapping(schema)
 header.Header(mapping).emit()
 enum_header.EnumHeader(mapping).emit()
 implementation.Implementation(mapping).emit()
-rt_header.RuntimeTypingHeader(mapping).emit()
-rt_implementation.RuntimeTypingImplementation(mapping).emit()
-
-def retry():
-    import imp
-    imp.reload(rt_header)
-    imp.reload(rt_implementation)
-    rt_header.RuntimeTypingHeader(mapping).emit()
-    rt_implementation.RuntimeTypingImplementation(mapping).emit()
+latebound_header.LateBoundHeader(mapping).emit()
+latebound_implementation.LateBoundImplementation(mapping).emit()
 """%('\n'.join(statements)))

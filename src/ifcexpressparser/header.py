@@ -22,34 +22,34 @@ import documentation
 
 class Header:
     def __init__(self, mapping):
-        emitted_types = set(mapping.express_to_cpp_typemapping.values())
         declarations = []
 
         write = lambda str, **kwargs: declarations.append(str%dict({
             'documentation': templates.multi_line_comment(documentation.description(kwargs['name']))}, **kwargs))
-
-        for name, type in mapping.schema.simpletypes.items():
-            type_str = mapping.make_type_string(type)
-            type_dep = mapping.get_type_dep(type)
-            if type_dep in emitted_types:
-                write(templates.simpletype, name=name, type=type_str)
-                emitted_types.add(name)
-
+            
+        forward_names = list(mapping.schema.entities.keys()) + list(mapping.schema.simpletypes.keys())
+        forward_definitions = "".join(["class %s; "%n for n in forward_names])
+        
         for name, type in mapping.schema.selects.items():
             write(templates.select, name=name)
-            emitted_types.add(name)
-
-        for name, type in mapping.schema.simpletypes.items():
-            if name not in emitted_types:
-                type_str = mapping.make_type_string(type)
-                write(templates.simpletype, name=name, type=type_str)
-                emitted_types.add(name)
 
         for name, type in mapping.schema.enumerations.items():
             short_name = name[:-4] if name.endswith("Enum") else name
             write(templates.enumeration, name=name, values=", ".join(["%s_%s"%(short_name, v) for v in type.values]))
-
-        forward_definitions = "".join(["class %s; "%n for n in mapping.schema.entities.keys()])
+        
+        emitted_simpletypes = set()
+        while len(emitted_simpletypes) < len(mapping.schema.simpletypes):
+            for name, type in mapping.schema.simpletypes.items():
+                if name in emitted_simpletypes: continue
+                type_str = mapping.make_type_string(mapping.flatten_type_string(type))
+                attr_type = mapping.make_argument_type(type)
+                superclass = mapping.simple_type_parent(name)
+                if superclass is None: 
+                    superclass = "IfcUtil::IfcBaseType"
+                elif superclass not in emitted_simpletypes:
+                    continue
+                emitted_simpletypes.add(name)
+                write(templates.simpletype, name=name, type=type_str, attr_type=attr_type, superclass=superclass)
 
         class_definitions = []
 
@@ -65,11 +65,11 @@ class Header:
                     def write_method(attr):
                         if attr.optional:
                             attr_lines.append(templates.optional_attribute_description % (attr.name, name))
-                            attr_lines.append("bool has%s();"%(attr.name))
+                            attr_lines.append("bool has%s() const;"%(attr.name))
                         attr_lines.extend(["/// %s"%d for d in documentation.description((name, attr.name))])
                         type_str = mapping.get_parameter_type(attr, allow_optional=False, allow_entities=False)
                         if mapping.make_argument_type(attr) != "IfcUtil::Argument_UNKNOWN":
-                            attr_lines.append("%s %s();"%(type_str, attr.name))
+                            attr_lines.append("%s %s() const;"%(type_str, attr.name))
                             attr_lines.append("void set%s(%s v);"%(attr.name, type_str))
 
                     [write_method(attr) for attr in type.attributes]
@@ -103,6 +103,11 @@ class Header:
                     argument_type_function_body_tail = (" return %s::getArgumentType(i); "%type.supertypes[0]) if len(type.supertypes) == 1 else ' throw IfcParse::IfcException("argument out of range"); '
 
                     argument_type_function_body = argument_type_function_body_switch_stmt + argument_type_function_body_tail
+                    
+                    argument_entity_function_body_switch_stmt = " switch (i) {%s}"%("".join(['case %d: return %s; '%(i+argument_start, mapping.make_argument_entity(attr)) for i, attr in enumerate(type.attributes)])) if len(type.attributes) else ""
+                    argument_entity_function_body_tail = (" return %s::getArgumentEntity(i); "%type.supertypes[0]) if len(type.supertypes) == 1 else ' throw IfcParse::IfcException("argument out of range"); '
+
+                    argument_entity_function_body = argument_entity_function_body_switch_stmt + argument_entity_function_body_tail
 
                     constructor_arguments = ", ".join("%(full_type)s v%(index)d_%(name)s"%a for a in mapping.get_assignable_arguments(type))
 

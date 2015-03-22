@@ -30,27 +30,16 @@ bl_info = {
     "description": "Import files in the "\
         "Industry Foundation Classes (.ifc) file format",
     "author": "Thomas Krijnen, IfcOpenShell",
-    "blender": (2, 5, 8),
-    "api": 37702,
+    "blender": (2, 73, 0),
     "location": "File > Import",
-    "warning": "",
-    "wiki_url": "http://sourceforge.net/apps/"\
-        "mediawiki/ifcopenshell/index.php",
-    "tracker_url": "http://sourceforge.net/tracker/?group_id=543113",
+    "tracker_url": "https://sourceforge.net/p/ifcopenshell/"\
+        "_list/tickets?source=navbar",
     "category": "Import-Export"}
 
-import sys   
-max_unicode = 0x110000-1 if sys.platform[0:5] == 'linux' else 0x10000-1
-wrong_unicode = max_unicode != sys.maxunicode
-if wrong_unicode:
-    print("\nWarning: wrong unicode representation detected, switching to "\
-        "compatibility layer for text transferral, may result in undefined "\
-        "behaviour, please use offical release from http://blender.org\n")
-    
 if "bpy" in locals():
     import imp
-    if "IfcImport" in locals():
-        imp.reload(IfcImport)
+    if "ifcopenshell" in locals():
+        imp.reload(ifcopenshell)
 
 import bpy
 import mathutils
@@ -70,54 +59,64 @@ bpy.types.Object.ifc_type = StringProperty(name="IFC Entity Type",
     description="The STEP Datatype keyword")
 
 
-def import_ifc(filename, use_names, process_relations):
-    global wrong_unicode
-    from . import IfcImport
+def import_ifc(filename, use_names, process_relations, blender_booleans):
+    from . import ifcopenshell
+    from .ifcopenshell import geom as ifcopenshell_geom
     print("Reading %s..."%bpy.path.basename(filename))
-    if wrong_unicode:
-        valid_file = IfcImport.InitUCS2( 
-            ''.join(['\0']+['\0%s'%s for s in filename]+['\0\0'])
-        )
-    else:
-        valid_file = IfcImport.Init(filename)
+    settings = ifcopenshell_geom.settings()
+    settings.set(settings.DISABLE_OPENING_SUBTRACTIONS, blender_booleans)
+    iterator = ifcopenshell_geom.iterator(settings, filename)
+    valid_file = iterator.findContext()
     if not valid_file:
-        IfcImport.CleanUp()
         return False
     print("Done reading file")
     id_to_object = {}
     id_to_parent = {}
     id_to_matrix = {}
+    openings = []
     old_progress = -1
     print("Creating geometry...")
     while True:
-        ob = IfcImport.Get()
-        
-        if wrong_unicode:
-            ob_name = ''.join([chr(c) for c in ob.name_as_intvector()])
-            ob_type = ''.join([chr(c) for c in ob.type_as_intvector()])
-            ob_guid = ''.join([chr(c) for c in ob.guid_as_intvector()])
-        else:
-            ob_name, ob_type, ob_guid = ob.name, ob.type, ob.guid
-        
-        f = ob.mesh.faces
-        v = ob.mesh.verts
-        m = ob.matrix
-        t = ob_type[0:21]
-        nm = ob_name if len(ob_name) and use_names else ob_guid
+        ob = iterator.get()
+ 
+        f = ob.geometry.faces
+        v = ob.geometry.verts
+        mats = ob.geometry.materials
+        matids = ob.geometry.material_ids
+        m = ob.transformation.matrix.data
+        t = ob.type[0:21]
+        nm = ob.name if len(ob.name) and use_names else ob.guid
 
         verts = [[v[i], v[i + 1], v[i + 2]] \
             for i in range(0, len(v), 3)]
         faces = [[f[i], f[i + 1], f[i + 2]] \
             for i in range(0, len(f), 3)]
 
-        me = bpy.data.meshes.new('mesh%d' % ob.mesh.id)
+        me = bpy.data.meshes.new('mesh%d' % ob.geometry.id)
         me.from_pydata(verts, [], faces)
-        if t in bpy.data.materials:
-            mat = bpy.data.materials[t]
-            mat.use_fake_user = True
-        else:
-            mat = bpy.data.materials.new(t)
-        me.materials.append(mat)
+        
+        def add_material(mname, props):
+            if mname in bpy.data.materials:
+                mat = bpy.data.materials[mname]
+                mat.use_fake_user = True
+            else:
+                mat = bpy.data.materials.new(mname)
+                for k,v in props.items():
+                    setattr(mat, k, v)
+            me.materials.append(mat)
+                
+        needs_default = -1 in matids
+        if needs_default: add_material(t, {})
+        
+        for mat in mats:
+            props = {}
+            if mat.has_diffuse: props['diffuse_color'] = mat.diffuse
+            if mat.has_specular: props['specular_color'] = mat.specular
+            if mat.has_transparency and mat.transparency > 0:
+                props['alpha'] = 1.0 - mat.transparency
+                props['use_transparency'] = True
+            if mat.has_specularity: props['specular_hardness'] = mat.specularity
+            add_material(mat.name, props)
 
         bob = bpy.data.objects.new(nm, me)
         mat = mathutils.Matrix(([m[0], m[1], m[2], 0],
@@ -138,10 +137,12 @@ def import_ifc(filename, use_names, process_relations):
         bpy.ops.object.mode_set(mode='OBJECT')
 
         bob.ifc_id, bob.ifc_guid, bob.ifc_name, bob.ifc_type = \
-            ob.id, ob_guid, ob_name, ob_type
+            ob.id, ob.guid, ob.name, ob.type
 
-        bob.hide = ob_type == 'IfcSpace' or ob_type == 'IfcOpeningElement'
-        bob.hide_render = bob.hide
+        if ob.type == 'IfcSpace' or ob.type == 'IfcOpeningElement':
+            if not (ob.type == 'IfcOpeningElement' and blender_booleans):
+                bob.hide = bob.hide_render = True
+            bob.draw_type = 'WIRE'
         
         if ob.id not in id_to_object: id_to_object[ob.id] = []
         id_to_object[ob.id].append(bob)
@@ -149,11 +150,19 @@ def import_ifc(filename, use_names, process_relations):
         if ob.parent_id > 0:
             id_to_parent[ob.id] = ob.parent_id
             
-        progress = IfcImport.Progress() // 2
+        if blender_booleans and ob.type == 'IfcOpeningElement':
+            openings.append(ob.id)
+            
+        faces = me.polygons if hasattr(me, 'polygons') else me.faces
+        if len(faces) == len(matids):
+            for face, matid in zip(faces, matids):
+                face.material_index = matid + (1 if needs_default else 0)
+            
+        progress = iterator.progress() // 2
         if progress > old_progress:
             print("\r[" + "#" * progress + " " * (50 - progress) + "]", end="")
             old_progress = progress
-        if not IfcImport.Next():
+        if not iterator.next():
             break
 
     print("\rDone creating geometry" + " " * 30)
@@ -169,24 +178,13 @@ def import_ifc(filename, use_names, process_relations):
         if parent_id in id_to_object:
             bob = id_to_object[parent_id][0]
         else:
-            parent_ob = IfcImport.GetObject(parent_id)
+            parent_ob = iterator.getObject(parent_id)
             if parent_ob.id == -1:
                 bob = None
             else:
-                if wrong_unicode:
-                    parent_ob_name = ''.join(
-                        [chr(c) for c in parent_ob.name_as_intvector()])
-                    parent_ob_type = ''.join(
-                        [chr(c) for c in parent_ob.type_as_intvector()])
-                    parent_ob_guid = ''.join(
-                        [chr(c) for c in parent_ob.guid_as_intvector()])
-                else:
-                    parent_ob_name, parent_ob_type, parent_ob_guid = \
-                        parent_ob.name, parent_ob.type, parent_ob.guid
-                    
-                m = parent_ob.matrix
-                nm = parent_ob_name if len(parent_ob_name) and use_names \
-                    else parent_ob_guid
+                m = parent_ob.transformation.matrix.data
+                nm = parent_ob.name if len(parent_ob.name) and use_names \
+                    else parent_ob.guid
                 bob = bpy.data.objects.new(nm, None)
                 
                 mat = mathutils.Matrix((
@@ -201,7 +199,7 @@ def import_ifc(filename, use_names, process_relations):
 
                 bob.ifc_id = parent_ob.id
                 bob.ifc_name, bob.ifc_type, bob.ifc_guid = \
-                    parent_ob_name, parent_ob_type, parent_ob_guid
+                    parent_ob.name, parent_ob.type, parent_ob.guid
 
                 if parent_ob.parent_id > 0:
                     id_to_parent[parent_id] = parent_ob.parent_id
@@ -226,13 +224,19 @@ def import_ifc(filename, use_names, process_relations):
             
     if process_relations:
         print("Done processing relations")
-    
-    if not wrong_unicode:
-        txt = bpy.data.texts.new("%s.log"%bpy.path.basename(filename))
-        txt.from_string(IfcImport.GetLog())
+        
+    for opening_id in openings:
+        parent_id = id_to_parent[opening_id]
+        if parent_id in id_to_object:
+            parent_ob = id_to_object[parent_id][0]
+            for opening_ob in id_to_object[opening_id]:
+                mod = parent_ob.modifiers.new("opening", "BOOLEAN")
+                mod.operation = "DIFFERENCE"
+                mod.object = opening_ob
+        
+    txt = bpy.data.texts.new("%s.log"%bpy.path.basename(filename))
+    txt.from_string(iterator.getLog())
 
-    IfcImport.CleanUp()
-    
     return True
 
 
@@ -251,15 +255,13 @@ class ImportIFC(bpy.types.Operator, ImportHelper):
             " relations to parenting" \
             " (warning: may be slow on large files)",
         default=False)
+    blender_booleans = BoolProperty(name="Use Blender booleans",
+        description="Use Blender boolean modifiers for opening" \
+            " elements",
+        default=False)
 
     def execute(self, context):
-        global wrong_unicode
-        if wrong_unicode and sys.platform[0:5] != 'linux':
-            self.report({'ERROR'},
-                'Your version of Blender is incompatible with IfcBlender\n' \
-                'Please use the offical release from http://blender.org instead'
-            )
-        elif not import_ifc(self.filepath, self.use_names, self.process_relations):
+        if not import_ifc(self.filepath, self.use_names, self.process_relations, self.blender_booleans):
             self.report({'ERROR'},
                 'Unable to parse .ifc file or no geometrical entities found'
             )

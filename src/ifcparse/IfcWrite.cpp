@@ -18,12 +18,19 @@
  ********************************************************************************/
 
 #include <iomanip>
+#include <locale>
 
 #include "../ifcparse/IfcParse.h" 
-#include "../ifcparse/IfcFile.h"
 #include "../ifcparse/IfcWrite.h"
 #include "../ifcparse/IfcWritableEntity.h"
 #include "../ifcparse/IfcCharacterDecoder.h"
+#include "../ifcparse/IfcFile.h"
+
+#ifdef USE_IFC4
+#include "../ifcparse/Ifc4-latebound.h"
+#else
+#include "../ifcparse/Ifc2x3-latebound.h"
+#endif
 
 using namespace IfcWrite;
 
@@ -36,7 +43,16 @@ IfcWritableEntity::~IfcWritableEntity() {
 	delete _id;
 }
 int IfcWritableEntity::setId(int i) {
-	return *(_id = new int(i > 0 ? i : file->FreshId()));
+	if (i > 0) {
+		delete _id;
+		return *(_id = new int(i));
+	} else {
+		if (_id) { return *_id; }
+		else { 
+			delete _id; 
+			return *(_id = new int(file->FreshId())); 
+		}
+	}
 }
 IfcWritableEntity::IfcWritableEntity(IfcAbstractEntity* e) 
 {
@@ -46,56 +62,51 @@ IfcWritableEntity::IfcWritableEntity(IfcAbstractEntity* e)
 
 	const unsigned int count = e->getArgumentCount();
 	for ( unsigned int i = 0; i < count; ++ i ) {
-		args[i] = e->getArgument(i);
-		writemask[i] = false;
+		this->setArgument(i, e->getArgument(i));
 	}
-}
-// TODO: Reove redundancy with IfcParse::Entity
-IfcEntities IfcWritableEntity::getInverse(IfcSchema::Type::Enum c) {
-	IfcEntities l = IfcEntities(new IfcEntityList());
-	int id = _id ? *_id : setId();
-	IfcEntities all = file->EntitiesByReference(id);
-	if ( ! all ) return l;
-	for( IfcEntityList::it it = all->begin(); it != all->end();++  it  ) {
-		if ( c == IfcSchema::Type::ALL || (*it)->is(c) ) {
-			l->push(*it);
-		}
-	}
-	return l;
-}
-IfcEntities IfcWritableEntity::getInverse(IfcSchema::Type::Enum c, int i, const std::string& a) {
-	IfcEntities l = IfcEntities(new IfcEntityList());
-	IfcEntities all = getInverse(c);
-	for( IfcEntityList::it it = all->begin(); it != all->end();++ it  ) {
-		const std::string s = *(*it)->entity->getArgument(i);
-		if ( s == a ) {
-			l->push(*it);
-		}
-	}
-	return l;
 }
 
-std::string IfcWritableEntity::datatype() { return IfcSchema::Type::ToString(_type); }
-ArgumentPtr IfcWritableEntity::getArgument (unsigned int i) { if ( i >= getArgumentCount() ) throw IfcParse::IfcException("Argument not set"); return args[i]; }
-unsigned int IfcWritableEntity::getArgumentCount() {return args.size(); }
+IfcEntityList::ptr IfcWritableEntity::getInverse(IfcSchema::Type::Enum type, int attribute_index) {
+	if (file) {
+		int id = _id ? *_id : setId();
+		return file->getInverse(id, type, attribute_index);
+	} else {
+		throw IfcParse::IfcException("Instance not part of a file");
+	}
+}
+
+std::string IfcWritableEntity::datatype() const { return IfcSchema::Type::ToString(_type); }
+Argument* IfcWritableEntity::getArgument (unsigned int i) {
+	if (args[i] == 0) {
+		_setArgument(i, boost::none);
+	}
+	return args[i];
+}
+unsigned int IfcWritableEntity::getArgumentCount() const {return args.size(); }
 IfcSchema::Type::Enum IfcWritableEntity::type() const { return _type; }
 bool IfcWritableEntity::is(IfcSchema::Type::Enum v) const { return _type == v; }
-std::string IfcWritableEntity::toString(bool upper) {
+std::string IfcWritableEntity::toString(bool upper) const {
 	std::stringstream ss;
+	ss.imbue(std::locale::classic());
+	
 	std::string dt = datatype();
-	if ( upper ) {
+	if (upper) {
 		for (std::string::iterator p = dt.begin(); p != dt.end(); ++p ) *p = toupper(*p);
 	}
-	if ( _id && !IfcSchema::Type::IsSimple(_type) ) {
-		ss << "#" << *_id << "=";
+
+	if (_id && !IfcSchema::Type::IsSimple(type())) {
+		ss << "#" << *_id;
+		ss << "=";
 	}
+
 	ss << dt << "(";
-	for ( std::map<int,ArgumentPtr>::const_iterator it = args.begin(); it != args.end(); ++ it ) {
+	for (std::map<int,Argument*>::const_iterator it = args.begin(); it != args.end(); ++ it) {
 		if ( it != args.begin() ) ss << ",";
-		const ArgumentPtr a = it->second;
+		const Argument* a = it->second;
 		ss << it->second->toString(upper);
 	}
 	ss << ")";
+
 	return ss.str();
 }
 unsigned int IfcWritableEntity::id() { 
@@ -104,7 +115,7 @@ unsigned int IfcWritableEntity::id() {
 	}
 	return *_id; 
 }
-bool IfcWritableEntity::isWritable() { return true; }
+IfcWritableEntity* IfcWritableEntity::isWritable() { return this; }
 bool IfcWritableEntity::arg_writable(int i) {
 	std::map<int,bool>::const_iterator it = writemask.find(i);
 	if ( it == writemask.end() ) return false;
@@ -125,6 +136,79 @@ template <typename T> void IfcWritableEntity::_setArgument(int i, const T& t) {
 void IfcWritableEntity::setArgument(int i) {
 	_setArgument(i, boost::none);
 }
+
+void IfcWritableEntity::setArgument(int i, Argument* a) {
+	IfcWrite::IfcWriteArgument* wa = new IfcWrite::IfcWriteArgument(this);
+	IfcUtil::ArgumentType attr_type = a->type();
+	switch(attr_type) {
+	case IfcUtil::Argument_NULL:
+		this->setArgument(i);
+		break;
+	case IfcUtil::Argument_DERIVED:
+		this->setArgumentDerived(i);
+		break;
+	case IfcUtil::Argument_INT:
+		this->setArgument(i, static_cast<int>(*a));
+		break;
+	case IfcUtil::Argument_BOOL:
+		this->setArgument(i, static_cast<bool>(*a));
+		break;
+	case IfcUtil::Argument_DOUBLE:
+		this->setArgument(i, static_cast<double>(*a));
+		break;
+	case IfcUtil::Argument_STRING:
+		this->setArgument(i, static_cast<std::string>(*a));
+		break; 
+	case IfcUtil::Argument_VECTOR_INT: {
+		std::vector<int> attr_value = *a;
+		this->setArgument(i, attr_value); }
+		break;
+	case IfcUtil::Argument_VECTOR_DOUBLE: {
+		std::vector<double> attr_value = *a;
+		this->setArgument(i, attr_value); }
+		break;
+	case IfcUtil::Argument_VECTOR_STRING: {
+		std::vector<std::string> attr_value = *a;
+		this->setArgument(i, attr_value); }
+		break;
+	case IfcUtil::Argument_ENUMERATION: {
+		IfcSchema::Type::Enum ty = IfcSchema::Type::GetAttributeEntity(_type, i);
+		std::string enum_literal = a->toString();
+		// Remove leading and trailing '.'
+		enum_literal = enum_literal.substr(1, enum_literal.size() - 2);
+		std::pair<const char*, int> enum_ref = IfcSchema::Type::GetEnumerationIndex(ty, enum_literal);
+		this->setArgument(i, enum_ref.second, enum_ref.first); }
+		break; 
+	case IfcUtil::Argument_ENTITY: {
+		this->setArgument(i, static_cast<IfcUtil::IfcBaseClass*>(*a)); }
+		break; 
+	case IfcUtil::Argument_ENTITY_LIST: {
+		IfcEntityList::ptr instances = *a;
+		IfcEntityList::ptr mapped_instances(new IfcEntityList);
+		for (IfcEntityList::it it = instances->begin(); it != instances->end(); ++it) {
+			mapped_instances->push(*it);
+		}
+		this->setArgument(i, mapped_instances); }
+		break; 
+	case IfcUtil::Argument_ENTITY_LIST_LIST: {
+		IfcEntityListList::ptr instances = *a;
+		IfcEntityListList::ptr mapped_instances(new IfcEntityListList);
+		for (IfcEntityListList::outer_it it = instances->begin(); it != instances->end(); ++it) {
+			std::vector<IfcUtil::IfcBaseClass*> inner;
+			for (IfcEntityListList::inner_it jt = it->begin(); jt != it->end(); ++jt) {
+				inner.push_back(*jt);
+			}
+			mapped_instances->push(inner);
+		}		
+		this->setArgument(i, mapped_instances); }
+		break; 
+	case IfcUtil::Argument_UNKNOWN:
+		throw IfcParse::IfcException("Unknown argument encountered");
+		break;
+	}
+}
+
+
 void IfcWritableEntity::setArgumentDerived(int i) {
 	_setArgument(i, IfcWriteArgument::Derived());
 }
@@ -143,14 +227,21 @@ void IfcWritableEntity::setArgument(int i,const std::string& v){
 void IfcWritableEntity::setArgument(int i,double v){
 	_setArgument(i, v);
 }
-void IfcWritableEntity::setArgument(int i,IfcUtil::IfcSchemaEntity v){
+void IfcWritableEntity::setArgument(int i,IfcUtil::IfcBaseClass* v){
 	if ( v ) {
 		_setArgument(i, v);
 	} else {
 		_setArgument(i, boost::none);
 	}
 }
-void IfcWritableEntity::setArgument(int i,IfcEntities v){
+void IfcWritableEntity::setArgument(int i,IfcEntityList::ptr v){
+	if ( v.get() ) {
+		_setArgument(i, v);
+	} else {
+		_setArgument(i, boost::none);
+	}
+}
+void IfcWritableEntity::setArgument(int i,IfcEntityListList::ptr v){
 	if ( v.get() ) {
 		_setArgument(i, v);
 	} else {
@@ -179,8 +270,9 @@ public:
 	int operator()(const std::vector<double>& i) const { return i.size(); }
 	int operator()(const std::vector<std::string>& i) const { return i.size(); }
 	int operator()(const IfcWriteArgument::EnumerationReference& i) const { return -1; }
-	int operator()(const IfcUtil::IfcSchemaEntity& i) const { return -1; }
-	int operator()(const IfcEntities& i) const { return i->Size(); }
+	int operator()(const IfcUtil::IfcBaseClass* const& i) const { return -1; }
+	int operator()(const IfcEntityList::ptr& i) const { return i->size(); }
+	int operator()(const IfcEntityListList::ptr& i) const { return i->size(); }
 };
 
 class StringBuilderVisitor : public boost::static_visitor<void> {
@@ -199,7 +291,8 @@ private:
 	// REAL = [ SIGN ] DIGIT { DIGIT } "." { DIGIT } [ "E" [ SIGN ] DIGIT { DIGIT } ] .
 	std::string format_double(const double& d) {
 		std::ostringstream oss;
-		oss << std::setprecision(16) << d;
+		oss.imbue(std::locale::classic());
+		oss << std::setprecision(15) << d;
 		const std::string str = oss.str();
 		oss.str("");
 		std::string::size_type e = str.find('e');
@@ -217,14 +310,6 @@ private:
 		}
 		return oss.str();
 	}
-	void serialize_double(const std::vector<double>& i) {
-		data << "(";
-		for (std::vector<double>::const_iterator it = i.begin(); it != i.end(); ++it) {
-			if (it != i.begin()) data << ",";
-			data << format_double(*it);
-		}
-		data << ")";
-	}
 	bool upper;
 public:
 	StringBuilderVisitor(std::ostringstream& stream, bool upper = false) 
@@ -236,28 +321,27 @@ public:
 	void operator()(const double& i) { data << format_double(i); }
 	void operator()(const std::string& i) { 
 		std::string s = i;
-		if (upper) s = IfcCharacterEncoder(s);
-		data << s; 
+		if (upper) {
+			data << static_cast<std::string>(IfcCharacterEncoder(s));
+		} else {
+			data << '\'' << s << '\'';
+		}
 	}
-	void operator()(const std::vector<int>& i) { serialize(i); }
-	void operator()(const std::vector<double>& i) { serialize_double(i); }
-	void operator()(const std::vector<std::string>& i) { serialize(i); }
+	void operator()(const std::vector<int>& i);
+	void operator()(const std::vector<double>& i);
+	void operator()(const std::vector<std::string>& i);
 	void operator()(const IfcWriteArgument::EnumerationReference& i) {
 		data << "." << i.enumeration_value << ".";
 	}
-	void operator()(const IfcUtil::IfcSchemaEntity& i) { 
+	void operator()(const IfcUtil::IfcBaseClass* const& i) { 
 		IfcAbstractEntity* e = i->entity;
 		if ( IfcSchema::Type::IsSimple(e->type()) ) {
 			data << e->toString(upper);
 		} else {
-			if (e->file) {
-				data << "#" << e->id();
-			} else {
-				data << "#?";
-			}
+			data << "#" << e->id();
 		}
 	}
-	void operator()(const IfcEntities& i) { 
+	void operator()(const IfcEntityList::ptr& i) { 
 		data << "(";
 		for (IfcEntityList::it it = i->begin(); it != i->end(); ++it) {
 			if (it != i->begin()) data << ",";
@@ -265,27 +349,77 @@ public:
 		}
 		data << ")";
 	}
+	void operator()(const IfcEntityListList::ptr& i) { 
+		data << "(";
+		for (IfcEntityListList::outer_it outer_it = i->begin(); outer_it != i->end(); ++outer_it) {
+			data << "(";
+			if (outer_it != i->begin()) data << ",";
+			for (IfcEntityListList::inner_it inner_it = outer_it->begin(); inner_it != outer_it->end(); ++inner_it) {
+				if (inner_it != outer_it->begin()) data << ",";
+				(*this)(*inner_it);
+			}
+			data << ")";
+		}
+		data << ")";
+	}
 	operator std::string() { return data.str(); }
 };
+
+template <>
+void StringBuilderVisitor::serialize(const std::vector<std::string>& i) {
+	data << "(";
+	for (std::vector<std::string>::const_iterator it = i.begin(); it != i.end(); ++it) {
+		if (it != i.begin()) data << ",";
+		if (upper) {
+			std::string s = IfcCharacterEncoder(*it);
+			data << s;
+		} else {
+			data << *it;
+		}
+	}
+	data << ")";
+}
+
+template <>
+void StringBuilderVisitor::serialize(const std::vector<double>& i) {
+	data << "(";
+	for (std::vector<double>::const_iterator it = i.begin(); it != i.end(); ++it) {
+		if (it != i.begin()) data << ",";
+		data << format_double(*it);
+	}
+	data << ")";
+}
+
+void StringBuilderVisitor::operator()(const std::vector<int>& i) { serialize(i); }
+void StringBuilderVisitor::operator()(const std::vector<double>& i) { serialize(i); }
+void StringBuilderVisitor::operator()(const std::vector<std::string>& i) { serialize(i); }
+	
 
 IfcWriteArgument::operator int() const { return as<int>(); }
 IfcWriteArgument::operator bool() const { return as<bool>(); }
 IfcWriteArgument::operator double() const { return as<double>(); }
-IfcWriteArgument::operator std::string() const { return as<std::string>(); }
+IfcWriteArgument::operator std::string() const { 
+	if (type() == IfcUtil::Argument_ENUMERATION) {
+		return as<EnumerationReference>().enumeration_value;
+	}
+	return as<std::string>(); 
+}
 IfcWriteArgument::operator std::vector<double>() const { return as<std::vector<double> >(); }
 IfcWriteArgument::operator std::vector<int>() const { return as<std::vector<int> >(); }
 IfcWriteArgument::operator std::vector<std::string>() const { return as<std::vector<std::string > >(); }
-IfcWriteArgument::operator IfcUtil::IfcSchemaEntity() const { return as<IfcUtil::IfcSchemaEntity>(); }
-IfcWriteArgument::operator IfcEntities() const { return as<IfcEntities>(); }
-bool IfcWriteArgument::isNull() const { return argumentType() == argument_type_null; }
-ArgumentPtr IfcWriteArgument::operator [] (unsigned int i) const { throw IfcParse::IfcException("Invalid cast"); }
+IfcWriteArgument::operator IfcUtil::IfcBaseClass*() const { return as<IfcUtil::IfcBaseClass*>(); }
+IfcWriteArgument::operator IfcEntityList::ptr() const { return as<IfcEntityList::ptr>(); }
+IfcWriteArgument::operator IfcEntityListList::ptr() const { throw; }
+bool IfcWriteArgument::isNull() const { return type() == IfcUtil::Argument_NULL; }
+Argument* IfcWriteArgument::operator [] (unsigned int i) const { throw IfcParse::IfcException("Invalid cast"); }
 std::string IfcWriteArgument::toString(bool upper) const {
 	std::ostringstream str;
+	str.imbue(std::locale::classic());
 	StringBuilderVisitor v(str, upper);
 	container.apply_visitor(v);
 	return v;
 }
-unsigned int IfcWriteArgument::Size() const {
+unsigned int IfcWriteArgument::size() const {
 	SizeVisitor v;
 	const int size = container.apply_visitor(v);
 	if (size == -1) {
@@ -294,74 +428,25 @@ unsigned int IfcWriteArgument::Size() const {
 		return size;
 	}
 }
-IfcWriteArgument::argument_type IfcWriteArgument::argumentType() const {
-	return static_cast<argument_type>(container.which());
-}
 
-IfcEntities IfcSelectHelperEntity::getInverse(IfcSchema::Type::Enum,int,const std::string &) {throw IfcParse::IfcException("Invalid cast");}
-IfcEntities IfcSelectHelperEntity::getInverse(IfcSchema::Type::Enum) {throw IfcParse::IfcException("Invalid cast");}
-std::string IfcSelectHelperEntity::datatype() { return IfcSchema::Type::ToString(_type); }
-ArgumentPtr IfcSelectHelperEntity::getArgument(unsigned int i) {
-	if ( i != 0 ) throw IfcParse::IfcException("Invalid cast");
-	return arg;
+IfcUtil::ArgumentType IfcWriteArgument::type() const {
+	return static_cast<IfcUtil::ArgumentType>(container.which());
 }
-unsigned int IfcSelectHelperEntity::getArgumentCount() { return 1; }
-IfcSchema::Type::Enum IfcSelectHelperEntity::type() const { return _type; }
-bool IfcSelectHelperEntity::is(IfcSchema::Type::Enum t) const { return _type == t; }
-std::string IfcSelectHelperEntity::toString(bool upper) {
-	std::stringstream ss;
-	std::string dt = datatype();
-	if ( upper ) {
-		for (std::string::iterator p = dt.begin(); p != dt.end(); ++p ) *p = toupper(*p);
-	}
-	ss << dt << "(" << arg->toString(upper) << ")";
-	return ss.str();
-}
-unsigned int IfcSelectHelperEntity::id() { throw IfcParse::IfcException("Invalid cast"); }
-bool IfcSelectHelperEntity::isWritable() { throw IfcParse::IfcException("Invalid cast"); }
-
-IfcSelectHelper::IfcSelectHelper(const std::string& v, IfcSchema::Type::Enum t) {
-	IfcWriteArgument* a = new IfcWriteArgument(0);
-	a->set(v);
-	this->entity = new IfcSelectHelperEntity(t,a);
-}
-IfcSelectHelper::IfcSelectHelper(const char* const v, IfcSchema::Type::Enum t) {
-	IfcWriteArgument* a = new IfcWriteArgument(0);
-	a->set<std::string>(v);
-	this->entity = new IfcSelectHelperEntity(t,a);
-}
-IfcSelectHelper::IfcSelectHelper(int v, IfcSchema::Type::Enum t) {
-	IfcWriteArgument* a = new IfcWriteArgument(0);
-	a->set(v);
-	this->entity = new IfcSelectHelperEntity(t,a);
-}
-IfcSelectHelper::IfcSelectHelper(double v, IfcSchema::Type::Enum t) {
-	IfcWriteArgument* a = new IfcWriteArgument(0);
-	a->set(v);
-	this->entity = new IfcSelectHelperEntity(t,a);
-}
-IfcSelectHelper::IfcSelectHelper(bool v, IfcSchema::Type::Enum t) {
-	IfcWriteArgument* a = new IfcWriteArgument(0);
-	a->set(v);
-	this->entity = new IfcSelectHelperEntity(t,a);
-}
-bool IfcSelectHelper::is(IfcSchema::Type::Enum t) const { return entity->is(t); }
-IfcSchema::Type::Enum IfcSelectHelper::type() const { return entity->type(); } 
 
 EntityBuffer* EntityBuffer::i = 0;
 EntityBuffer* EntityBuffer::instance() {
 	if ( ! i ) {
 		i = new EntityBuffer();
-		i->buffer = IfcEntities(new IfcEntityList());
+		i->buffer = IfcEntityList::ptr(new IfcEntityList);
 	}
 	return i;
 }
-IfcEntities EntityBuffer::Get() {
+IfcEntityList::ptr EntityBuffer::Get() {
 	return instance()->buffer;
 }
 void EntityBuffer::Clear() {
-	instance()->buffer = IfcEntities(new IfcEntityList());
+	instance()->buffer = IfcEntityList::ptr(new IfcEntityList);
 }
-void EntityBuffer::Add(IfcUtil::IfcSchemaEntity e) {
+void EntityBuffer::Add(IfcUtil::IfcBaseClass* e) {
 	instance()->buffer->push(e);
 }

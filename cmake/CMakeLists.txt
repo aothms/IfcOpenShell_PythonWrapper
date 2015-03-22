@@ -123,21 +123,20 @@ ENDIF(MSVC)
 
 INCLUDE_DIRECTORIES(${INCLUDE_DIRECTORIES} ${OCC_INCLUDE_DIR} ${OPENCOLLADA_INCLUDE_DIRS} /usr/inc /usr/local/inc /usr/local/include/oce ${ICU_INCLUDE_DIR} ${Boost_INCLUDE_DIRS})
 
-ADD_LIBRARY(IfcParse STATIC 
+ADD_LIBRARY(IfcParse STATIC
+  ../src/ifcparse/Ifc2x3-latebound.cpp
   ../src/ifcparse/Ifc2x3.cpp
+  ../src/ifcparse/Ifc4-latebound.cpp
   ../src/ifcparse/Ifc4.cpp
-  ../src/ifcparse/IfcUtil.cpp
-  ../src/ifcparse/IfcParse.cpp
   ../src/ifcparse/IfcCharacterDecoder.cpp
-  
-  ../src/ifcparse/IfcWrite.cpp
   ../src/ifcparse/IfcGuidHelper.cpp
-  
   ../src/ifcparse/IfcHierarchyHelper.cpp
-  
-  ../src/ifcparse/Ifc2x3-rt.cpp
-  ../src/ifcparse/Ifc4-rt.cpp
-  ../src/ifcparse/IfcUntypedEntity.cpp
+  ../src/ifcparse/IfcLateBoundEntity.cpp
+  ../src/ifcparse/IfcParse.cpp
+  ../src/ifcparse/IfcSIPrefix.cpp
+  ../src/ifcparse/IfcSpfHeader.cpp
+  ../src/ifcparse/IfcUtil.cpp
+  ../src/ifcparse/IfcWrite.cpp
 )
 
 ADD_LIBRARY(IfcGeom STATIC
@@ -145,8 +144,9 @@ ADD_LIBRARY(IfcGeom STATIC
   ../src/ifcgeom/IfcGeomFaces.cpp
   ../src/ifcgeom/IfcGeomFunctions.cpp
   ../src/ifcgeom/IfcGeomHelpers.cpp
-  ../src/ifcgeom/IfcGeomObjects.cpp
+  ../src/ifcgeom/IfcGeomMaterial.cpp
   ../src/ifcgeom/IfcGeomRenderStyles.cpp
+  ../src/ifcgeom/IfcGeomRepresentation.cpp
   ../src/ifcgeom/IfcGeomShapes.cpp
   ../src/ifcgeom/IfcGeomWires.cpp
   ../src/ifcgeom/IfcRegister.cpp
@@ -160,11 +160,12 @@ TARGET_LINK_LIBRARIES(IfcGeom IfcParse)
 
 LINK_DIRECTORIES (${LINK_DIRECTORIES} ${IfcOpenShell_BINARY_DIR} ${OCC_LIBRARY_DIR} ${OPENCOLLADA_LIBRARY_DIR} /usr/lib /usr/lib64 /usr/local/lib /usr/local/lib64 ${ICU_LIBRARY_DIR} ${Boost_LIBRARY_DIRS}) 
 
-ADD_EXECUTABLE(IfcConvert 
+ADD_EXECUTABLE(IfcConvert
     ../src/ifcconvert/ColladaSerializer.cpp
     ../src/ifcconvert/IfcConvert.cpp
     ../src/ifcconvert/OpenCascadeBasedSerializer.cpp
-    ../src/ifcconvert/WavefrontObjSerializer.cpp   
+    ../src/ifcconvert/WavefrontObjSerializer.cpp
+    ../src/ifcconvert/XmlSerializer.cpp
 )
 
 TARGET_LINK_LIBRARIES (IfcConvert IfcParse IfcGeom TKernel TKMath TKBRep TKGeomBase TKGeomAlgo TKG3d TKG2d TKShHealing TKTopAlgo TKMesh TKPrim TKBool TKBO TKFillet TKSTEP TKSTEPBase TKSTEPAttr TKXSBase TKSTEP209 TKIGES TKOffset ${Boost_LIBRARIES} ${OPENCOLLADA_LIBRARIES})
@@ -186,8 +187,12 @@ ADD_SUBDIRECTORY(../src/examples examples)
 # CMake installation targets
 SET(include_files_geom
     ../src/ifcgeom/IfcGeom.h
-    ../src/ifcgeom/IfcGeomObjects.h
+    ../src/ifcgeom/IfcGeomElement.h
+    ../src/ifcgeom/IfcGeomIterator.h
+    ../src/ifcgeom/IfcGeomIteratorSettings.h
+    ../src/ifcgeom/IfcGeomMaterial.h
     ../src/ifcgeom/IfcGeomRenderStyles.h
+    ../src/ifcgeom/IfcGeomRepresentation.h
     ../src/ifcgeom/IfcRegister.h
     ../src/ifcgeom/IfcRegisterConvertCurve.h
     ../src/ifcgeom/IfcRegisterConvertFace.h
@@ -200,29 +205,29 @@ SET(include_files_geom
     ../src/ifcgeom/IfcRegisterIsShapeCollection.h
     ../src/ifcgeom/IfcRegisterPurgeCache.h
     ../src/ifcgeom/IfcRegisterUndef.h
-    ../src/ifcgeom/IfcGeomRenderStyles.h
     ../src/ifcgeom/IfcRepresentationShapeItem.h
 )
 SET(include_files_parse
+    ../src/ifcparse/Ifc2x3-latebound.h
     ../src/ifcparse/Ifc2x3.h
     ../src/ifcparse/Ifc2x3enum.h
+    ../src/ifcparse/Ifc4-latebound.h
     ../src/ifcparse/Ifc4.h
     ../src/ifcparse/Ifc4enum.h
     ../src/ifcparse/IfcCharacterDecoder.h
+    ../src/ifcparse/IfcEntityDescriptor.h
     ../src/ifcparse/IfcException.h
     ../src/ifcparse/IfcFile.h
     ../src/ifcparse/IfcHierarchyHelper.h
+    ../src/ifcparse/IfcLateBoundEntity.h
     ../src/ifcparse/IfcParse.h
+    ../src/ifcparse/IfcSIPrefix.h
+    ../src/ifcparse/IfcSpfHeader.h
+    ../src/ifcparse/IfcSpfStream.h
     ../src/ifcparse/IfcUtil.h
-    ../src/ifcparse/SharedPointer.h
-    
-    ../src/ifcparse/IfcWrite.h
     ../src/ifcparse/IfcWritableEntity.h
-
-    ../src/ifcparse/Ifc2x3-rt.h
-    ../src/ifcparse/Ifc4-rt.h
-    ../src/ifcparse/IfcUntypedEntity.h
-    ../src/ifcparse/IfcEntityDescriptor.h
+    ../src/ifcparse/IfcWrite.h
+    ../src/ifcparse/SharedPointer.h
 )
 INSTALL(FILES ${include_files_geom} DESTINATION include/ifcgeom)
 INSTALL(FILES ${include_files_parse} DESTINATION include/ifcparse)

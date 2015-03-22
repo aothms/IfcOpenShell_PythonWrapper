@@ -24,6 +24,8 @@
 #include <BRepBuilderAPI_GTransform.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 
+#include <Standard_Version.hxx>
+
 #include "OpenCascadeBasedSerializer.h"
 
 bool OpenCascadeBasedSerializer::ready() {
@@ -34,18 +36,25 @@ bool OpenCascadeBasedSerializer::ready() {
 	return succeeded;
 }
 
-void OpenCascadeBasedSerializer::writeShapeModel(const IfcGeomObjects::IfcGeomShapeModelObject* o) {		
-	for (IfcGeom::IfcRepresentationShapeItems::const_iterator it = o->mesh().begin(); it != o->mesh().end(); ++ it) {
+void OpenCascadeBasedSerializer::write(const IfcGeom::BRepElement<double>* o) {		
+	for (IfcGeom::IfcRepresentationShapeItems::const_iterator it = o->geometry().begin(); it != o->geometry().end(); ++ it) {
 		gp_GTrsf gtrsf = it->Placement();
+
+		const std::vector<double>& matrix = o->transformation().matrix().data();
 		
-		// TODO:
-		gp_GTrsf o_trsf;
-		int k = 0;
-		for( int i = 1; i < 5; ++ i )
-			for ( int j = 1; j < 4; ++ j )
-				o_trsf.SetValue(j, i, o->matrix()[k++]);
-		
+		// Convert the matrix back into a transformation object. The tolerance values
+		// are taken into consideration to reconstruct the form of the transformation.
+		gp_Trsf o_trsf;
+		o_trsf.SetValues(
+			matrix[0], matrix[3], matrix[6], matrix[ 9],
+			matrix[1], matrix[4], matrix[7], matrix[10], 
+			matrix[2], matrix[5], matrix[8], matrix[11]
+#if OCC_VERSION_HEX < 0x60800
+			, Precision::Angular(), Precision::Confusion()
+#endif
+		);
 		gtrsf.PreMultiply(o_trsf);
+		
 		const TopoDS_Shape& s = it->Shape();			
 			
 		bool trsf_valid = false;
@@ -64,18 +73,18 @@ void OpenCascadeBasedSerializer::writeShapeModel(const IfcGeomObjects::IfcGeomSh
 }
 
 #define RATHER_SMALL (1e-3)
-#define ALMOST_THE_SAME(a,b) (fabs(a-b) < RATHER_SMALL)
+#define APPROXIMATELY_THE_SAME(a,b) (fabs(a-b) < RATHER_SMALL)
 
 const char* OpenCascadeBasedSerializer::getSymbolForUnitMagnitude(float mag) {
-	if (ALMOST_THE_SAME(mag, 0.001f)) {
+	if (APPROXIMATELY_THE_SAME(mag, 0.001f)) {
 		return "MM";
-	} else if (ALMOST_THE_SAME(mag, 0.01f)) {
+	} else if (APPROXIMATELY_THE_SAME(mag, 0.01f)) {
 		return "CM";
-	} else if (ALMOST_THE_SAME(mag, 1.0f)) {
+	} else if (APPROXIMATELY_THE_SAME(mag, 1.0f)) {
 		return "M";
-	} else if (ALMOST_THE_SAME(mag, 0.3048f)) {
+	} else if (APPROXIMATELY_THE_SAME(mag, 0.3048f)) {
 		return "FT";
-	} else if (ALMOST_THE_SAME(mag, 0.0254f)) {
+	} else if (APPROXIMATELY_THE_SAME(mag, 0.0254f)) {
 		return "INCH";
 	} else {
 		return 0;

@@ -17,7 +17,6 @@
  *                                                                              *
  ********************************************************************************/
 
-#include "../ifcparse/IfcParse.h"
 #include "../ifcparse/IfcFile.h"
 
 using namespace IfcSchema;
@@ -41,7 +40,7 @@ int main(int argc, char** argv) {
 
 	// Lets get a list of IfcBuildingElements, this is the parent
 	// type of things like walls, windows and doors.
-	// EntitiesByType is a templated function and returns a
+	// entitiesByType is a templated function and returns a
 	// templated class that behaves like a std::vector.
 	// Note that the return types are all typedef'ed as members of
 	// the generated classes, ::list for the templated vector class,
@@ -55,17 +54,17 @@ int main(int argc, char** argv) {
 	// we need to cast them to IfcWindows. Since these properties 
 	// are optional we need to make sure the properties are 
 	// defined for the window in question before accessing them.
-	IfcBuildingElement::list elements = file.EntitiesByType<IfcBuildingElement>();
+	IfcBuildingElement::list::ptr elements = file.entitiesByType<IfcBuildingElement>();
 
-	std::cout << "Found " << elements->Size() << " elements in " << argv[1] << ":" << std::endl;
+	std::cout << "Found " << elements->size() << " elements in " << argv[1] << ":" << std::endl;
 	
-	for ( IfcBuildingElement::it it = elements->begin(); it != elements->end(); ++ it ) {
+	for ( IfcBuildingElement::list::it it = elements->begin(); it != elements->end(); ++ it ) {
 		
-		const IfcBuildingElement::ptr element = *it;
+		const IfcBuildingElement* element = *it;
 		std::cout << element->entity->toString() << std::endl;
 		
 		if ( element->is(IfcWindow::Class()) ) {
-			const IfcWindow::ptr window = reinterpret_pointer_cast<IfcBuildingElement,IfcWindow>(element);
+			const IfcWindow* window = (IfcWindow*)element;
 			
 			if ( window->hasOverallWidth() && window->hasOverallHeight() ) {
 				const double area = window->OverallWidth()*window->OverallHeight();

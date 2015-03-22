@@ -167,7 +167,15 @@
 				>
 			</File>
 			<File
-				RelativePath="..\src\ifcgeom\IfcGeomObjects.cpp"
+				RelativePath="..\src\ifcgeom\IfcGeomMaterial.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomRenderStyles.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomRepresentation.cpp"
 				>
 			</File>
 			<File
@@ -182,10 +190,6 @@
 				RelativePath="..\src\ifcgeom\IfcRegister.cpp"
 				>
 			</File>
-			<File
-				RelativePath="..\src\ifcgeom\IfcGeomRenderStyles.cpp"
-				>
-			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -197,7 +201,27 @@
 				>
 			</File>
 			<File
-				RelativePath="..\src\ifcgeom\IfcGeomObjects.h"
+				RelativePath="..\src\ifcgeom\IfcGeomElement.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomIterator.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomIteratorSettings.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomMaterial.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomRenderStyles.h"
+				>
+			</File>
+			<File
+				RelativePath="..\src\ifcgeom\IfcGeomRepresentation.h"
 				>
 			</File>
 			<File
@@ -217,6 +241,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\src\ifcgeom\IfcRegisterConvertShapes.h"
+				>
+			</File>
+			<File
 				RelativePath="..\src\ifcgeom\IfcRegisterConvertWire.h"
 				>
 			</File>
@@ -233,6 +261,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\src\ifcgeom\IfcRegisterIsShapeCollection.h"
+				>
+			</File>
+			<File
 				RelativePath="..\src\ifcgeom\IfcRegisterPurgeCache.h"
 				>
 			</File>
@@ -242,10 +274,6 @@
 			</File>
 			<File
 				RelativePath="..\src\ifcgeom\IfcRepresentationShapeItem.h"
-				>
-			</File>
-			<File
-				RelativePath="..\src\ifcgeom\IfcGeomRenderStyles.h"
 				>
 			</File>
 		</Filter>

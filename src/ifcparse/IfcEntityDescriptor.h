@@ -27,9 +27,14 @@
 #include <algorithm>
 
 #include "../ifcparse/SharedPointer.h"
-#include "../ifcparse/Ifc2x3enum.h"
 #include "../ifcparse/IfcUtil.h"
 #include "../ifcparse/IfcException.h"
+
+#ifdef USE_IFC4
+#include "../ifcparse/Ifc4enum.h"
+#else
+#include "../ifcparse/Ifc2x3enum.h"
+#endif
 
 namespace IfcUtil {
 
@@ -82,7 +87,7 @@ namespace IfcUtil {
 	public:
 		IfcEntityDescriptor(IfcSchema::Type::Enum type, IfcEntityDescriptor* parent)
 			: type(type), parent(parent) {}
-		void add(const std::string& name, bool optional, ArgumentType argument_type, IfcSchema::Type::Enum data_type = IfcSchema::Type::ALL) {
+		void add(const std::string& name, bool optional, ArgumentType argument_type, IfcSchema::Type::Enum data_type = IfcSchema::Type::UNDEFINED) {
 			arguments.push_back(IfcArgumentDescriptor(name, optional, argument_type, data_type));
 		}
 		unsigned getArgumentCount() const {
@@ -106,10 +111,10 @@ namespace IfcUtil {
 				? parent->getArgumentOptional(i)
 				: get_argument(i-a).optional;
 		}
-		IfcSchema::Type::Enum getArgumentEnumerationClass(unsigned i) const {
+		IfcSchema::Type::Enum getArgumentEntity(unsigned i) const {
 			const unsigned a = argument_start();
 			return i < a
-				? parent->getArgumentEnumerationClass(i)
+				? parent->getArgumentEntity(i)
 				: get_argument(i-a).data_type;
 		}
 		unsigned getArgumentIndex(const std::string& s) const {

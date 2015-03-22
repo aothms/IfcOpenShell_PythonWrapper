@@ -41,8 +41,6 @@
 #include "../ifcparse/IfcUtil.h"
 #include "../ifcparse/IfcParse.h"
 
-using namespace IfcSchema;
-
 SHAPES(IfcShellBasedSurfaceModel);
 SHAPES(IfcFaceBasedSurfaceModel);
 SHAPES(IfcShapeRepresentation);
@@ -50,6 +48,10 @@ SHAPES(IfcMappedItem);
 SHAPES(IfcFacetedBrep);
 SHAPES(IfcGeometricSet);
 
+#ifdef USE_IFC4
+SHAPE(IfcCylindricalSurface);
+SHAPE(IfcAdvancedBrep);
+#endif
 SHAPE(IfcExtrudedAreaSolid);
 SHAPE(IfcRevolvedAreaSolid);
 SHAPE(IfcConnectedFaceSet);
@@ -68,10 +70,10 @@ SHAPE(IfcCurveBoundedPlane);
 SHAPE(IfcRectangularTrimmedSurface);
 SHAPE(IfcSurfaceCurveSweptAreaSolid);
 SHAPE(IfcSweptDiskSolid);
-#ifdef USE_IFC4
-SHAPE(IfcCylindricalSurface);
-#endif
 
+#ifdef USE_IFC4
+FACE(IfcAdvancedFace);
+#endif
 FACE(IfcArbitraryProfileDefWithVoids);
 FACE(IfcArbitraryClosedProfileDef);
 FACE(IfcRoundedRectangleProfileDef);
@@ -79,6 +81,7 @@ FACE(IfcRectangleHollowProfileDef);
 FACE(IfcRectangleProfileDef);
 FACE(IfcTrapeziumProfileDef)
 FACE(IfcCShapeProfileDef);
+// IfcAsymmetricIShapeProfileDef included
 FACE(IfcIShapeProfileDef);
 FACE(IfcLShapeProfileDef);
 FACE(IfcTShapeProfileDef);
@@ -92,6 +95,8 @@ FACE(IfcCompositeProfileDef);
 FACE(IfcDerivedProfileDef);
 FACE(IfcFace);
 
+WIRE(IfcEdgeCurve);
+WIRE(IfcEdgeLoop);
 WIRE(IfcPolyline);
 WIRE(IfcPolyLoop);
 WIRE(IfcCompositeCurve);

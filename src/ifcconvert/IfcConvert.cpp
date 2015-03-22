@@ -33,12 +33,13 @@
 
 #include <boost/program_options.hpp>
 
-#include "../ifcgeom/IfcGeomObjects.h"
+#include "../ifcgeom/IfcGeomIterator.h"
 
 #include "../ifcconvert/ColladaSerializer.h"
 #include "../ifcconvert/IgesSerializer.h"
 #include "../ifcconvert/StepSerializer.h"
 #include "../ifcconvert/WavefrontObjSerializer.h"
+#include "../ifcconvert/XmlSerializer.h"
 
 void printVersion() {
 	std::cerr << "IfcOpenShell IfcConvert " << IFCOPENSHELL_VERSION << std::endl;
@@ -55,6 +56,7 @@ void printUsage(const boost::program_options::options_description& generic_optio
 #endif
 	std::cerr << "  .stp   STEP           Standard for the Exchange of Product Data" << std::endl
 	          << "  .igs   IGES           Initial Graphics Exchange Specification" << std::endl
+	          << "  .xml   XML            Property definitions and decomposition tree" << std::endl
 	          << std::endl
 	          << "Command line options" << std::endl << generic_options << std::endl
 	          << "Advanced options" << std::endl << geom_options << std::endl;
@@ -84,35 +86,48 @@ int main(int argc, char** argv) {
 		("input-file", boost::program_options::value<std::string>(), "input IFC file")
 		("output-file", boost::program_options::value<std::string>(), "output geometry file");
 
-	std::vector<std::string> ignore_types_vector;
+	std::vector<std::string> entity_vector;
 	boost::program_options::options_description geom_options;
 	geom_options.add_options()
-		("weld-vertices", "Specifies whether vertices are welded, meaning that the coordinates "
-						  "vector will only contain unique xyz-triplets. This results in a "
-					      "manifold mesh which is useful for modelling applications, but might "
-					      "result in unwanted shading artifacts in rendering applications.")
-		("use-world-coords", "Specifies whether to apply the local placements of building elements "
-						     "directly to the coordinates of the representation mesh rather than "
-						     "to represent the local placement in the 4x3 matrix, which will in that "
-						     "case be the identity matrix.")
-		("convert-back-units", "Specifies whether to convert back geometrical output back to the "
-							   "unit of measure in which it is defined in the IFC file. Default is "
-							   "to use meters.")
-		("sew-shells", "Specifies whether to sew the faces of IfcConnectedFaceSets together. This is a "
-					   "potentially time consuming operation, but guarantees a consistent orientation "
-					   "of surface normals, even if the faces are not properly oriented in the IFC file.")
-		("merge-boolean-operands", "Specifies whether to merge all IfcOpeningElement operands into a single "
-								   "operand before applying the subtraction operation. This may "
-								   "introduce a performance improvement at the risk of failing, in "
-								   "which case the subtraction is applied one-by-one.")
-		("force-ccw-face-orientation", "Recompute topological face normals using Newell's Method to "
-									   "guarantee that face vertices are defined in a Counter Clock "
-									   "Wise order, even if the faces are not part of a closed shell.")
-		("disable-opening-subtractions", "Specifies whether to disable the boolean subtraction of "
-										 "IfcOpeningElement Representations from their RelatingElements.")
-		("ignore-types", boost::program_options::value< std::vector<std::string> >(&ignore_types_vector)->multitoken(), 
-			"A list of IFC datatype keywords that should not be included in the geometrical output. "
-			"Defaults to IfcOpeningElement and IfcSpace");
+		("weld-vertices",
+			"Specifies whether vertices are welded, meaning that the coordinates "
+			"vector will only contain unique xyz-triplets. This results in a "
+			"manifold mesh which is useful for modelling applications, but might "
+			"result in unwanted shading artefacts in rendering applications.")
+		("use-world-coords", 
+			"Specifies whether to apply the local placements of building elements "
+			"directly to the coordinates of the representation mesh rather than "
+			"to represent the local placement in the 4x3 matrix, which will in that "
+			"case be the identity matrix.")
+		("convert-back-units",
+			"Specifies whether to convert back geometrical output back to the "
+			"unit of measure in which it is defined in the IFC file. Default is "
+			"to use meters.")
+		("sew-shells", 
+			"Specifies whether to sew the faces of IfcConnectedFaceSets together. "
+			"This is a potentially time consuming operation, but guarantees a "
+			"consistent orientation of surface normals, even if the faces are not "
+			"properly oriented in the IFC file.")
+		("merge-boolean-operands", 
+			"Specifies whether to merge all IfcOpeningElement operands into a single "
+			"operand before applying the subtraction operation. This may "
+			"introduce a performance improvement at the risk of failing, in "
+			"which case the subtraction is applied one-by-one.")
+		("force-ccw-face-orientation", 
+			"Recompute topological face normals using Newell's Method to "
+			"guarantee that face vertices are defined in a Counter Clock "
+			"Wise order, even if the faces are not part of a closed shell.")
+		("disable-opening-subtractions", 
+			"Specifies whether to disable the boolean subtraction of "
+			"IfcOpeningElement Representations from their RelatingElements.")
+		("include", 
+			"Specifies that the entities listed after --entities are to be included")
+		("exclude", 
+			"Specifies that the entities listed after --entities are to be excluded")
+		("entities", boost::program_options::value< std::vector<std::string> >(&entity_vector)->multitoken(), 
+			"A list of entities that should be included in or excluded from the "
+			"geometrical output, depending on whether --ignore or --include is "
+			"specified. Defaults to IfcOpeningElement and IfcSpace to be excluded.");
 	
 	boost::program_options::options_description cmdline_options;
 	cmdline_options.add(generic_options).add(fileio_options).add(geom_options);
@@ -128,13 +143,19 @@ int main(int argc, char** argv) {
 	} catch (const boost::program_options::unknown_option& e) {
 		std::cerr << "[Error] Unknown option '" << e.get_option_name() << "'" << std::endl << std::endl;
 		// Usage information will be emitted below
+	} catch (...) {
+		// Catch other errors such as invalid command line syntax
 	}
 	boost::program_options::notify(vmap);
 
 	if (vmap.count("version")) {
 		printVersion();
-		return 1;
+		return 0;
 	} else if (vmap.count("help") || !vmap.count("input-file")) {
+		printUsage(generic_options, geom_options);
+		return vmap.count("help") ? 0 : 1;
+	} else if (vmap.count("include") && vmap.count("exclude")) {
+		std::cerr << "[Error] --include and --ignore can not be specified together" << std::endl;
 		printUsage(generic_options, geom_options);
 		return 1;
 	}
@@ -147,20 +168,22 @@ int main(int argc, char** argv) {
 	const bool merge_boolean_operands = vmap.count("merge-boolean-operands") != 0;
 	const bool force_ccw_face_orientation = vmap.count("force-ccw-face-orientation") != 0;
 	const bool disable_opening_subtractions = vmap.count("disable-opening-subtractions") != 0;
+	const bool include_entities = vmap.count("include") != 0;
 
 	// Gets the set ifc types to be ignored from the command line. 
-	std::set<std::string> ignore_types;
-	for (std::vector<std::string>::const_iterator it = ignore_types_vector.begin(); it != ignore_types_vector.end(); ++it) {
+	std::set<std::string> entities;
+	for (std::vector<std::string>::const_iterator it = entity_vector.begin(); it != entity_vector.end(); ++it) {
 		std::string lowercase_type = *it;
 		for (std::string::iterator c = lowercase_type.begin(); c != lowercase_type.end(); ++c) {
 			*c = tolower(*c);
 		}
-		ignore_types.insert(lowercase_type);
+		entities.insert(lowercase_type);
 	}
-	// If none are specified these are the defaults to skip from output
-	if (ignore_types_vector.empty()) {
-		ignore_types.insert("ifcopeningelement");
-		ignore_types.insert("ifcspace");
+
+	// If no entities are specified these are the defaults to skip from output
+	if (entity_vector.empty()) {
+		entities.insert("ifcopeningelement");
+		entities.insert("ifcspace");
 	}
 	
 	const std::string input_filename = vmap["input-file"].as<std::string>();
@@ -175,14 +198,6 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	IfcGeomObjects::Settings(IfcGeomObjects::USE_WORLD_COORDS, use_world_coords);
-	IfcGeomObjects::Settings(IfcGeomObjects::WELD_VERTICES, weld_vertices);
-	IfcGeomObjects::Settings(IfcGeomObjects::SEW_SHELLS, sew_shells);
-	IfcGeomObjects::Settings(IfcGeomObjects::CONVERT_BACK_UNITS, convert_back_units);
-	IfcGeomObjects::Settings(IfcGeomObjects::FASTER_BOOLEANS, merge_boolean_operands);
-	IfcGeomObjects::Settings(IfcGeomObjects::FORCE_CCW_FACE_ORIENTATION, force_ccw_face_orientation);
-	IfcGeomObjects::Settings(IfcGeomObjects::DISABLE_OPENING_SUBTRACTIONS, disable_opening_subtractions);
-
 	std::string output_extension = output_filename.substr(output_filename.size()-4);
 	for (std::string::iterator c = output_extension.begin(); c != output_extension.end(); ++c) {
 		*c = tolower(*c);
@@ -191,12 +206,40 @@ int main(int argc, char** argv) {
 	Logger::SetOutput(&std::cout, &log_stream);
 	Logger::Verbosity(verbose ? Logger::LOG_NOTICE : Logger::LOG_ERROR);
 
+	if (output_extension == ".xml") {
+		int exit_code = 1;
+		try {
+			XmlSerializer s(output_filename);
+			IfcParse::IfcFile f;
+			if (!f.Init(input_filename)) {
+				Logger::Message(Logger::LOG_ERROR, "Unable to parse .ifc file");
+			} else {
+				s.setFile(&f);
+				s.finalize();
+				exit_code = 0;
+			}
+		} catch (...) {}
+		write_log();
+		return exit_code;
+	}
+
+	IfcGeom::IteratorSettings settings;
+
+	settings.set(IfcGeom::IteratorSettings::APPLY_DEFAULT_MATERIALS,      true);
+	settings.set(IfcGeom::IteratorSettings::USE_WORLD_COORDS,             use_world_coords);
+	settings.set(IfcGeom::IteratorSettings::WELD_VERTICES,                weld_vertices);
+	settings.set(IfcGeom::IteratorSettings::SEW_SHELLS,                   sew_shells);
+	settings.set(IfcGeom::IteratorSettings::CONVERT_BACK_UNITS,           convert_back_units);
+	settings.set(IfcGeom::IteratorSettings::FASTER_BOOLEANS,              merge_boolean_operands);
+	settings.set(IfcGeom::IteratorSettings::FORCE_CCW_FACE_ORIENTATION,   force_ccw_face_orientation);
+	settings.set(IfcGeom::IteratorSettings::DISABLE_OPENING_SUBTRACTIONS, disable_opening_subtractions);
+
 	GeometrySerializer* serializer;
 	if (output_extension == ".obj") {
 		const std::string mtl_filename = output_filename.substr(0,output_filename.size()-3) + "mtl";
 		if (!use_world_coords) {
 			Logger::Message(Logger::LOG_NOTICE, "Using world coords when writing WaveFront OBJ files");
-			IfcGeomObjects::Settings(IfcGeomObjects::USE_WORLD_COORDS, true);
+			settings.set(IfcGeom::IteratorSettings::USE_WORLD_COORDS, true);
 		}
 		serializer = new WaveFrontOBJSerializer(output_filename, mtl_filename);
 #ifdef WITH_OPENCOLLADA
@@ -217,30 +260,43 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
+	if (!serializer->isTesselated()) {
+		if (weld_vertices) {
+			Logger::Message(Logger::LOG_NOTICE, "Weld vertices setting ignored when writing STEP or IGES files");
+		}
+		settings.disable_triangulation() = true;
+	}
+
+	IfcGeom::Iterator<double> context_iterator(settings, input_filename);
+
+	try {
+		if (include_entities) {
+			context_iterator.includeEntities(entities);
+		} else {
+			context_iterator.excludeEntities(entities);
+		}
+	} catch (const IfcParse::IfcException& e) {
+		std::cout << "[Error] " << e.what() << std::endl;
+		return 1;
+	}
+
 	if (!serializer->ready()) {
 		Logger::Message(Logger::LOG_ERROR, "Unable to open output file for writing");
 		write_log();
 		return 1;
 	}
 
-	if (!serializer->isTesselated()) {
-		IfcGeomObjects::Settings(IfcGeomObjects::DISABLE_TRIANGULATION, true);
-		if (weld_vertices) {
-			Logger::Message(Logger::LOG_NOTICE, "Weld vertices setting ignored when writing STEP or IGES files");
-		}
-	}
-
 	time_t start,end;
 	time(&start);
-	// Parse the file supplied in argv[1]. Returns true on succes.
-	if ( ! IfcGeomObjects::Init(input_filename, &std::cout, &log_stream) ) {
+	
+	if (!context_iterator.findContext()) {
 		Logger::Message(Logger::LOG_ERROR, "Unable to parse .ifc file or no geometrical entities found");
 		write_log();
 		return 1;
 	}
 
 	if (convert_back_units) {
-		serializer->setUnitNameAndMagnitude(IfcGeomObjects::GetUnitName(), IfcGeomObjects::GetUnitMagnitude());
+		serializer->setUnitNameAndMagnitude(context_iterator.getUnitName(), static_cast<const float>(context_iterator.getUnitMagnitude()));
 	} else {
 		serializer->setUnitNameAndMagnitude("METER", 1.0f);
 	}
@@ -252,35 +308,30 @@ int main(int argc, char** argv) {
 	int old_progress = -1;
 	Logger::Status("Creating geometry...");
 
-	// The functions IfcGeomObjects::Get() and IfcGeomObjects::Next() wrap an iterator of all geometrical entities in the Ifc file.
-	// IfcGeomObjects::Get() returns an IfcGeomObjects::IfcGeomObject (see IfcGeomObjects.h for definition)
-	// IfcGeomObjects::Next() is used to poll whether more geometrical entities are available    
+	// The functions IfcGeom::Iterator::get() and IfcGeom::Iterator::next() 
+	// wrap an iterator of all geometrical products in the Ifc file. 
+	// IfcGeom::Iterator::get() returns an IfcGeom::TriangulationElement or 
+	// -BRepElement pointer, based on current settings. (see IfcGeomIterator.h 
+	// for definition) IfcGeom::Iterator::next() is used to poll whether more 
+	// geometrical entities are available. None of these functions throw 
+	// exceptions, neither for parsing errors or geometrical errors. Upon 
+	// calling next() the entity to be returned has already been processed, a 
+	// true return value guarantees that a successfully processed product is 
+	// available. 
 	do {
-		const IfcGeomObjects::IfcObject* geom_object;
+		const IfcGeom::Element<double>* geom_object = context_iterator.get();
 		
 		if (serializer->isTesselated()) {
-			geom_object = IfcGeomObjects::Get();
+			serializer->write(static_cast<const IfcGeom::TriangulationElement<double>*>(geom_object));
 		} else {
-			geom_object = IfcGeomObjects::GetShapeModel();
+			serializer->write(static_cast<const IfcGeom::BRepElement<double>*>(geom_object));
 		}
-
-		std::string lowercase_type = geom_object->type();
-		for (std::string::iterator c = lowercase_type.begin(); c != lowercase_type.end(); ++c) {
-			*c = tolower(*c);
-		}
-		if (ignore_types.find(lowercase_type) != ignore_types.end()) continue;
-
-		if (serializer->isTesselated()) {
-			serializer->writeTesselated(static_cast<const IfcGeomObjects::IfcGeomObject*>(geom_object));
-		} else {
-			serializer->writeShapeModel(static_cast<const IfcGeomObjects::IfcGeomShapeModelObject*>(geom_object));
-		}
-
-		const int progress = IfcGeomObjects::Progress() / 2;
-		if ( old_progress!= progress ) Logger::ProgressBar(progress);
+		
+		const int progress = context_iterator.progress() / 2;
+		if (old_progress!= progress) Logger::ProgressBar(progress);
 		old_progress = progress;
 	
-	} while ( IfcGeomObjects::Next() );
+	} while (context_iterator.next());
 
 	serializer->finalize();
 	delete serializer;
@@ -292,6 +343,8 @@ int main(int argc, char** argv) {
 	time(&end);
 	int dif = (int) difftime (end,start);	
 	printf ("\nConversion took %d seconds\n", dif );
+
+	return 0;
 }
 
 void write_log() {
